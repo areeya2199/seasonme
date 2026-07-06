@@ -1,0 +1,2 @@
+backend = FastAPI + OpenCV + MediaPipe
+frontend = Flutter , D
