@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
+import 'theme/app_theme.dart';
+import 'screens/splash_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const SeasonMe());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SeasonMe extends StatelessWidget {
+  const SeasonMe({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: HomePage(),
+    return MaterialApp(
+      title: 'SeasonMe',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      home: const SplashScreen(),
     );
   }
 }
@@ -24,7 +29,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-
   String message = "Loading...";
 
   @override
@@ -40,17 +44,9 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("SeasonMe"),
-      ),
-      body: Center(
-        child: Text(
-          message,
-          style: const TextStyle(fontSize: 30),
-        ),
-      ),
+      appBar: AppBar(title: const Text("SeasonMe")),
+      body: Center(child: Text(message, style: const TextStyle(fontSize: 30))),
     );
   }
 }
