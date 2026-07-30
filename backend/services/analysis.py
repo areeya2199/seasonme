@@ -21,7 +21,7 @@ options = FaceLandmarkerOptions(
 )
 
 
-# โหลด model ครั้งเดียว
+
 landmarker = FaceLandmarker.create_from_options(options)
 
 
@@ -42,7 +42,7 @@ def analyze_skin(image):
     imageresize = cv2.resize(image, (640, 680))
 
 
-    # BGR -> RGB
+    # BGR RGB
     rgb_image = cv2.cvtColor(
         imageresize,
         cv2.COLOR_BGR2RGB
@@ -165,7 +165,22 @@ def analyze_skin(image):
     a_star = a - 128
     b_star = b_lab - 128
 
+    # Chroma
+    chroma = math.sqrt(a_star**2 + b_star**2)
+    # Lightness Group
+    if L_star > 66:
+        lightness_group = "High"
+    elif L_star >= 45:
+        lightness_group = "Medium"
+    else:
+        lightness_group = "Low"
 
+
+    # Chroma Group
+    if chroma >= 45:
+        chroma_group = "High"
+    else:
+        chroma_group = "Low"
 
     # Hue angle
 
@@ -188,11 +203,28 @@ def analyze_skin(image):
     else:
         undertone = "Cool"
 
+    # Personal Color 
+    if undertone == "Warm":
+
+        if L_star > 66 and chroma >= 45:
+            season = "Spring"
+        else:
+            season = "Autumn"
+
+    else:  # Cool
+
+        if L_star > 66 and chroma < 45:
+            season = "Summer"
+        else:
+            season = "Winter"
+
 
 
     return {
 
         "undertone": undertone,
+
+        "season": season,
 
         "hue_angle": round(
             hue_angle,
@@ -214,7 +246,10 @@ def analyze_skin(image):
         "lab": {
             "L": round(L_star,2),
             "a": round(a_star,2),
-            "b": round(b_star,2)
-        }
+            "b": round(b_star,2),
+            "chroma": round(chroma,2)
+        },
+        "lightness_group": lightness_group,
+        "chroma_group": chroma_group
 
     }
