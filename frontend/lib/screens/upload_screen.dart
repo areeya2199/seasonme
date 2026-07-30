@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
@@ -102,6 +104,44 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
       if (mounted) setState(() => _guidance = _Guidance.noFace);
     }
   }
+  Future<Map<String, dynamic>?> _uploadImage() async {
+  if (_imagePath == null) return null;
+
+  try {
+    var request = http.MultipartRequest(
+      "POST",
+      Uri.parse(
+        "http://10.0.2.2:8000/analyze",
+      ),
+    );
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        "file",
+        _imagePath!,
+      ),
+    );
+
+    var response = await request.send();
+
+    if (response.statusCode == 200) {
+      final body = await response.stream.bytesToString();
+
+      final data = jsonDecode(body);
+
+      print("API Result:");
+      print(data);
+
+      return data;
+    } else {
+      print("API Error: ${response.statusCode}");
+    }
+  } catch (e) {
+    print("Upload Error: $e");
+  }
+
+  return null;
+}
 
   //too dark/too bright
   double _estimateBrightness(img.Image image) {
@@ -137,16 +177,45 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
     return _Guidance.ready;
   }
 
-  void _continue() {
-    if (_guidance != _Guidance.ready || _imagePath == null) return;
-    //ถ้า photo ผ่านแล้วให้ไปหน้าถัดไป(QuestionnaireScreen)
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const QuestionnaireScreen()),
+  // void _continue() {
+  //   if (_guidance != _Guidance.ready || _imagePath == null) return;
+  //   // NOTE: matches the app's existing Upload flow (select_screen.dart
+  //   // used to go straight to QuestionnaireScreen) — this just adds the
+  //   // photo-quality check in front of it. TODO: once QuestionnaireScreen
+  //   // accepts an imagePath parameter, pass `_imagePath` through here so
+  //   // the checked photo carries forward instead of being picked again.
+  //   Navigator.push(
+  //     context,
+  //     MaterialPageRoute(builder: (_) => const QuestionnaireScreen()),
+  //   );
+  // }
+  Future<void> _continue() async {
+  if (!_ready || _imagePath == null) return;
+
+
+  final result = await _uploadImage();
+
+
+  if (result == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Upload failed"),
+      ),
     );
+    return;
   }
 
-  //UI
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const QuestionnaireScreen(),
+    ),
+  );
+}
+
+  // -- UI ----------------------------------------------------------------
+
   String get _statusMessage {
     switch (_guidance) {
       case _Guidance.none:
@@ -249,7 +318,7 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _ready ? _continue : null,
+                onPressed: _ready ? () => _continue() : null,
                 child: const Text('Continue'),
               ),
             ),
