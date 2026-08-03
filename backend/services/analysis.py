@@ -196,35 +196,152 @@ def analyze_skin(image, answers):
         hue_angle += 360
 
 
+    # ---------------- Questionnaire Score ----------------
 
-    # undertone
+    warm_score = 0.0
+    cool_score = 0.0
+
+# Q1 Vein Color
+    if answers["0"] == "Green":
+        warm_score += 1
+    elif answers["0"] == "Blue / Purple":
+        cool_score += 1
+    else:  # A mix of both
+        warm_score += 0.5
+        cool_score += 0.5
+
+
+# Q2 Jewelry
+    if answers["1"] == "Gold":
+        warm_score += 1
+    elif answers["1"] == "Silver":
+        cool_score += 1
+    else:  # Both look fine
+        warm_score += 0.5
+        cool_score += 0.5
+
+
+# Q3 Sun Reaction
+    if answers["2"] == "Tans easily, rarely burns":
+        warm_score += 1
+    elif answers["2"] == "Burns easily, rarely tans":
+        cool_score += 1
+    else:  # A little of both
+        warm_score += 0.5
+        cool_score += 0.5
+
+
+# ---------------- Image Score ----------------
+
     if hue_angle > 60:
+        image_warm = 1
+        image_cool = 0
+    else:
+        image_warm = 0
+        image_cool = 1
+
+
+# Normalize questionnaire score (0-1)
+
+    warm_question = warm_score / 3
+    cool_question = cool_score / 3
+
+
+# ---------------- Weighted Fusion ----------------
+# Image 70%
+# Questionnaire 30%
+
+    warm_total = image_warm * 0.70 + warm_question * 0.30
+    cool_total = image_cool * 0.70 + cool_question * 0.30
+
+
+# ---------------- Undertone ----------------
+
+    if warm_total >= cool_total:
         undertone = "Warm"
     else:
         undertone = "Cool"
 
-    # Personal Color 
+
+# ---------------- Q4 Preference ----------------
+
+    preference = answers["3"]
+
+
+# ---------------- Season ----------------
+
     if undertone == "Warm":
 
-        if L_star > 66 and chroma >= 45:
+    # Spring vs Autumn
+
+        if preference == "Bright & vivid":
             season = "Spring"
-        else:
+
+        elif preference == "Deep & rich":
             season = "Autumn"
 
-    else:  # Cool
+        elif preference == "Soft & muted":
+        # ใช้รูปช่วยตัดสิน
+            if L_star > 66 and chroma >= 45:
+                season = "Spring"
+            else:
+                season = "Autumn"
 
-        if L_star > 66 and chroma < 45:
-            season = "Summer"
         else:
+            if L_star > 66 and chroma >= 45:
+                season = "Spring"
+            else:
+                season = "Autumn"
+
+    else:
+
+    # Summer vs Winter
+
+        if preference == "Soft & muted":
+            season = "Summer"
+
+        elif preference == "Deep & rich":
             season = "Winter"
 
+        elif preference == "Bright & vivid":
+            if L_star > 66 and chroma < 45:
+                season = "Summer"
+            else:
+                season = "Winter"
 
+        else:
+            if L_star > 66 and chroma < 45:
+                season = "Summer"
+            else:
+                season = "Winter"
+    # # Personal Color 
+    # if undertone == "Warm":
+
+    #     if L_star > 66 and chroma >= 45:
+    #         season = "Spring"
+    #     else:
+    #         season = "Autumn"
+
+    # else:  # Cool
+
+    #     if L_star > 66 and chroma < 45:
+    #         season = "Summer"
+    #     else:
+    #         season = "Winter"
 
     return {
 
         "undertone": undertone,
 
         "season": season,
+
+        "warm_score": round(warm_total, 2),
+        "cool_score": round(cool_total, 2),
+
+        "questionnaire": {
+        "warm": round(warm_question, 2),
+        "cool": round(cool_question, 2)
+    },
 
         "hue_angle": round(
             hue_angle,
