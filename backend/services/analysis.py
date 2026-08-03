@@ -37,6 +37,7 @@ right_cheek = [
 
 
 def analyze_skin(image, answers):
+    
 
     # resize
     imageresize = cv2.resize(image, (640, 680))
@@ -230,6 +231,8 @@ def analyze_skin(image, answers):
         warm_score += 0.5
         cool_score += 0.5
 
+    
+
 
 # ---------------- Image Score ----------------
 
@@ -246,7 +249,10 @@ def analyze_skin(image, answers):
     warm_question = warm_score / 3
     cool_question = cool_score / 3
 
-
+    print("warm_score =", warm_score)
+    print("cool_score =", cool_score)
+    print("warm_question =", warm_question)
+    print("cool_question =", cool_question)
 # ---------------- Weighted Fusion ----------------
 # Image 70%
 # Questionnaire 30%
@@ -254,7 +260,10 @@ def analyze_skin(image, answers):
     warm_total = image_warm * 0.70 + warm_question * 0.30
     cool_total = image_cool * 0.70 + cool_question * 0.30
 
-
+    print("warm_total =", warm_total)
+    print("cool_total =", cool_total)
+    
+    
 # ---------------- Undertone ----------------
 
     if warm_total >= cool_total:
@@ -262,7 +271,8 @@ def analyze_skin(image, answers):
     else:
         undertone = "Cool"
 
-
+    print("undertone =", undertone)
+    
 # ---------------- Q4 Preference ----------------
 
     preference = answers["3"]
@@ -328,6 +338,7 @@ def analyze_skin(image, answers):
     #         season = "Summer"
     #     else:
     #         season = "Winter"
+    print("season =", season)
 
     return {
 

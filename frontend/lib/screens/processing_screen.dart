@@ -59,6 +59,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
     if (response.statusCode == 200) {
       final body = await response.stream.bytesToString();
+      print(body);
+
       return jsonDecode(body);
     }
   } catch (e) {
