@@ -3,8 +3,9 @@ import '../theme/app_theme.dart';
 import 'camera_screen.dart';
 import 'upload_screen.dart';
 import 'questionnaire_screen.dart';
+import 'photoguide.dart';
 
-/// Select — "How would you like to add your photo?"
+//select screen
 class SelectScreen extends StatelessWidget {
   const SelectScreen({super.key});
 
@@ -33,6 +34,7 @@ class SelectScreen extends StatelessWidget {
               'How would you like\nto add your photo?',
               style: TextStyle(
                 fontSize: 26,
+                fontFamily: 'Ninito',
                 fontWeight: FontWeight.w600,
                 color: AppColors.charcoal,
                 height: 1.3,
@@ -45,7 +47,7 @@ class SelectScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Take a Photo — guided live camera with real-time light/face checks.
+            // Take a Photo
             _OptionCard(
               icon: Icons.camera_alt_outlined,
               iconColor: AppColors.gold,
@@ -58,8 +60,7 @@ class SelectScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // Upload a Photo — pick from gallery, then run the same
-            // lighting/face checks on the still image before continuing.
+            // Upload a Photo
             _OptionCard(
               icon: Icons.photo_library_outlined,
               iconColor: AppColors.sage,
@@ -72,19 +73,41 @@ class SelectScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 32),
-            const Text(
-              'For best results',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: AppColors.charcoal,
-              ),
+            Row(
+              children: [
+                const Text(
+                  'For best results',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: AppColors.charcoal,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => showFacePhotoGuide(context),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: AppColors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'i',
+                      style: TextStyle(
+                        color: AppColors.charcoal,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        fontStyle: FontStyle.italic,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            const _TipRow(text: 'Use soft, natural daylight'),
-            const _TipRow(text: 'Remove makeup for accuracy'),
-            const _TipRow(text: 'Keep hair away from your face'),
-            const SizedBox(height: 24),
           ],
         ),
       ),

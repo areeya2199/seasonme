@@ -5,7 +5,8 @@ import 'splash_screen.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // TODO: replace with real user data from local storage / API.
+  //replace with real user data from local storage / API.
+  //ยังไม่เสร็จสมบูรณ์
   static const String _name = 'Gim';
   static const String _email = 'gim_uraiwan@gmail.com';
 

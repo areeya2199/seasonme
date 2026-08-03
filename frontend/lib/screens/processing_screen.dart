@@ -7,11 +7,7 @@ import '../data/season_palette.dart';
 import '../theme/app_theme.dart';
 import 'result_screen.dart';
 
-/// "Analyzing your Personal Color…" — shown right after the photo is
-/// captured (or uploaded). Steps through 4 labels one at a time, then
-/// moves on to the result. TODO: replace the timed simulation with the
-/// real upload + analysis API call, resolving to ResultScreen once the
-/// backend responds.
+//Analyzing your Personal Color
 class ProcessingScreen extends StatefulWidget {
   final String? imagePath;
   const ProcessingScreen({super.key, this.imagePath});
@@ -58,9 +54,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     super.dispose();
   }
 
-  /// TODO: replace with the real result from the color-analysis backend
-  /// (upload widget.imagePath + questionnaire answers, get a SeasonKey
-  /// back). Picking randomly here only stands in until that API exists.
   SeasonKey _mockAnalysisResult() {
     return SeasonKey.values[Random().nextInt(SeasonKey.values.length)];
   }

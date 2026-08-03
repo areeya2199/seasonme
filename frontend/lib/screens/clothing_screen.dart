@@ -5,9 +5,7 @@ import '../theme/app_theme.dart';
 import '../data/season_palette.dart';
 import '../services/clothing_check.dart';
 
-/// Outfit Checker — upload or snap a clothing photo, we pull the season's
-/// palette data via [season] (passed in from ResultScreen) and check
-/// whether the garment's dominant color is in the same tonal family.
+//หน้านี้ยังไม่เสร็จสมบูรณ์
 class ClothingScreen extends StatefulWidget {
   final SeasonKey season;
   const ClothingScreen({super.key, this.season = SeasonKey.Autumn});
@@ -425,10 +423,10 @@ class _ClothingScreenState extends State<ClothingScreen> {
       height: 64,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _profile.yourColorPalette.length,
+        itemCount: _profile.tops.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
-          final swatch = _profile.yourColorPalette[i];
+          final swatch = _profile.tops[i];
           return GestureDetector(
             onTap: () {
               final hsl = HSLColor.fromColor(swatch.color);
@@ -472,7 +470,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
   }
 }
 
-/// Simple dashed-border upload box (no external package needed)
+//Simple dashed border
 class DottedContainer extends StatelessWidget {
   final Widget child;
   const DottedContainer({super.key, required this.child});

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'processing_screen.dart';
 
-/// A single quiz question with answer options
+//A single quiz question with answer options
 class _QuizQuestion {
   final String title;
   final String subtitle;
@@ -20,7 +20,7 @@ class _QuizOption {
   _QuizOption({required this.label, required this.hint});
 }
 
-/// Questionnaire — multi-step quiz, mirrors "Your wrist vein color" step
+//Questionnaire — multi-step quiz, mirrors "Your wrist vein color" step
 class QuestionnaireScreen extends StatefulWidget {
   const QuestionnaireScreen({super.key});
 
@@ -32,7 +32,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int _step = 0;
   String? _selected;
 
-  // 4-question set — matches the analysis logic discussed earlier
+  //4 question
   final List<_QuizQuestion> _questions = [
     _QuizQuestion(
       title: 'Your wrist vein color',
@@ -225,7 +225,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
               const Spacer(),
 
-              // Continue + Skip
+              //Continue + Skip
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

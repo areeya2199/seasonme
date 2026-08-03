@@ -48,9 +48,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Color.fromARGB(255, 233, 172, 187),
-          foregroundColor: Color.fromARGB(255, 255, 194, 196),
-          shadowColor: Color.fromARGB(255, 205, 150, 182),
+          backgroundColor: Color(0xff4c3935),
           elevation: 1,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
@@ -68,7 +66,7 @@ class AppTheme {
   }
 }
 
-/// Reusable rounded card container used across screens
+//Reusable rounded card container used across screens
 class SoftCard extends StatelessWidget {
   final Widget child;
   final Color color;
@@ -110,15 +108,6 @@ class SoftCard extends StatelessWidget {
   }
 }
 
-/// A Scaffold whose entire background (including the area behind any
-/// custom top bar you build inside [body]) is painted with
-/// [AppColors.backgroundGradient]. Use this on every screen instead of
-/// a plain [Scaffold] so the gradient is 100% consistent app-wide.
-///
-/// Screens that need a back button / title / actions should build their
-/// own small header row at the top of [body] (see `profile_screen.dart`
-/// for an example) rather than passing a Material [AppBar], so the
-/// gradient has no seam where an opaque app bar would otherwise sit.
 class GradientScaffold extends StatelessWidget {
   final Widget body;
   final bool safeArea;
@@ -139,8 +128,6 @@ class GradientScaffold extends StatelessWidget {
   }
 }
 
-/// A small reusable back-button chip used at the top of screens that
-/// don't use a Material AppBar (keeps the gradient background seamless).
 class GradientBackButton extends StatelessWidget {
   final VoidCallback? onPressed;
   const GradientBackButton({super.key, this.onPressed});
