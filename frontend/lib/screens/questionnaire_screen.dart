@@ -22,7 +22,14 @@ class _QuizOption {
 
 //Questionnaire — multi-step quiz, mirrors "Your wrist vein color" step
 class QuestionnaireScreen extends StatefulWidget {
-  const QuestionnaireScreen({super.key});
+  final String imagePath;
+ 
+
+  const QuestionnaireScreen({
+    super.key,
+    required this.imagePath,
+    
+  });
 
   @override
   State<QuestionnaireScreen> createState() => _QuestionnaireScreenState();
@@ -31,6 +38,7 @@ class QuestionnaireScreen extends StatefulWidget {
 class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int _step = 0;
   String? _selected;
+  final Map<int, String> _answers = {};
 
   //4 question
   final List<_QuizQuestion> _questions = [
@@ -73,18 +81,25 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   ];
 
   void _next() {
-    if (_step < _questions.length - 1) {
-      setState(() {
-        _step++;
-        _selected = null;
-      });
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ProcessingScreen()),
-      );
-    }
+  _answers[_step] = _selected!;
+
+  if (_step < _questions.length - 1) {
+    setState(() {
+      _step++;
+      _selected = _answers[_step];
+    });
+  } else {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProcessingScreen(
+          imagePath: widget.imagePath,
+          answers: _answers,
+        ),
+      ),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +170,12 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GestureDetector(
-                    onTap: () => setState(() => _selected = opt.label),
+                    onTap: () {
+                      setState(() {
+                        _selected = opt.label;
+                        _answers[_step] = opt.label;
+                      });
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -239,7 +259,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
               TextButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ProcessingScreen()),
+                  MaterialPageRoute(builder: (_) => ProcessingScreen(
+                    imagePath: widget.imagePath,
+                    // season: widget.season,
+                    answers: _answers,
+                  )),
                 ),
                 child: const Text(
                   'Skip',

@@ -9,6 +9,8 @@ import 'package:http/http.dart' as http;
 
 import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
+import '../data/season_palette.dart';
+import 'processing_screen.dart';
 
 enum _Guidance {
   none,
@@ -189,29 +191,59 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
   //     MaterialPageRoute(builder: (_) => const QuestionnaireScreen()),
   //   );
   // }
-  Future<void> _continue() async {
-  if (!_ready || _imagePath == null) return;
-
-
-  final result = await _uploadImage();
-
-
-  if (result == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Upload failed"),
-      ),
-    );
-    return;
+    SeasonKey _convertSeason(String season) {
+    switch (season.toLowerCase()) {
+      case "spring":
+        return SeasonKey.Spring;
+      case "summer":
+        return SeasonKey.Summer;
+      case "autumn":
+        return SeasonKey.Autumn;
+      case "winter":
+        return SeasonKey.Winter;
+      default:
+        return SeasonKey.Summer;
+    }
   }
 
+  Future<void> _continue() async {
+  if (!_ready || _imagePath == null) return;
 
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => const QuestionnaireScreen(),
+      builder: (_) => QuestionnaireScreen(
+        imagePath: _imagePath!,
+      ),
     ),
   );
+
+
+
+  // final result = await _uploadImage();
+
+
+  // if (result == null) {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     const SnackBar(
+  //       content: Text("Upload failed"),
+  //     ),
+  //   );
+  //   return;
+  // }
+
+
+  // final season = _convertSeason(result["season"]);
+
+  Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => QuestionnaireScreen(
+      imagePath: _imagePath!,
+      // season: result["season"],
+    ),
+  ),
+);
 }
 
   // -- UI ----------------------------------------------------------------

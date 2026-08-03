@@ -8,6 +8,7 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import '../config/preview.dart';
 import '../theme/app_theme.dart';
+import 'questionnaire_screen.dart';
 import 'processing_screen.dart';
 
 enum _Guidance {
@@ -170,6 +171,7 @@ class _CameraScreenState extends State<CameraScreen>
         next = lightIssue ?? _Guidance.noFace;
       } else {
         final faces = await _faceDetector!.processImage(inputImage);
+        print("Faces detected: ${faces.length}");
         if (lightIssue != null) {
           next = lightIssue;
         } else if (faces.isEmpty) {
@@ -264,7 +266,9 @@ class _CameraScreenState extends State<CameraScreen>
     if (faceWidthFraction < 0.32) return _Guidance.moveCloser;
     if (faceWidthFraction > 0.68) return _Guidance.moveBack;
 
+    // print(face.boundingBox);
     return _Guidance.ready;
+
   }
 
   //Capture
@@ -275,10 +279,9 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const ProcessingScreen(imagePath: null),
+          builder: (_) => const ProcessingScreen(imagePath: "", answers: {}),
         ),
       );
-      return;
     }
 
     final controller = _controller;
@@ -291,9 +294,11 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ProcessingScreen(imagePath: file.path),
-        ),
-      );
+          builder: (_) => QuestionnaireScreen(
+          imagePath: file.path,
+    ),
+  ),
+);
     } catch (_) {
       if (mounted) setState(() => _capturing = false);
       final c = _controller;
