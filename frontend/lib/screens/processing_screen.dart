@@ -49,6 +49,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       ),
     );
 
+    request.fields["answers"] = jsonEncode(
+      widget.answers.map(
+        (key, value) => MapEntry(key.toString(), value),
+  ),
+);
+
     var response = await request.send();
 
     if (response.statusCode == 200) {

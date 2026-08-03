@@ -217,33 +217,6 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
       ),
     ),
   );
-
-
-
-  // final result = await _uploadImage();
-
-
-  // if (result == null) {
-  //   ScaffoldMessenger.of(context).showSnackBar(
-  //     const SnackBar(
-  //       content: Text("Upload failed"),
-  //     ),
-  //   );
-  //   return;
-  // }
-
-
-  // final season = _convertSeason(result["season"]);
-
-  Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) => QuestionnaireScreen(
-      imagePath: _imagePath!,
-      // season: result["season"],
-    ),
-  ),
-);
 }
 
   // -- UI ----------------------------------------------------------------

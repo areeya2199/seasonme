@@ -51,6 +51,8 @@ async def analyze(
         }
 
 
+    print("ANSWER:", answers)
+    
     result = analyze_skin(image, answers)
 
 
