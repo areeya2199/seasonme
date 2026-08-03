@@ -36,7 +36,7 @@ right_cheek = [
 ]
 
 
-def analyze_skin(image):
+def analyze_skin(image, answers):
 
     # resize
     imageresize = cv2.resize(image, (640, 680))
