@@ -6,13 +6,10 @@ import 'package:flutter/foundation.dart' show WriteBuffer;
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
+import '../config/preview.dart';
 import '../theme/app_theme.dart';
 import 'processing_screen.dart';
 
-/// The different things we might need to tell the user while they line
-/// their face up for the scan. Checked in priority order every frame:
-/// lighting problems first, then "no face found", then position/distance,
-/// and finally [ready] once everything looks good.
 enum _Guidance {
   initializing,
   noFace,
@@ -26,11 +23,7 @@ enum _Guidance {
   ready,
 }
 
-/// Face Scan — live camera preview with a circular face guide. Tells the
-/// user in real time if the lighting is too dark/too bright and if they
-/// need to move to center their face in the frame, then enables capture
-/// only once both lighting and framing look good (matches the reference
-/// flow: /select -> /camera -> /processing -> /result).
+//Face Scan , lighting check
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -42,37 +35,51 @@ class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   CameraController? _controller;
   FaceDetector? _faceDetector;
+  List<CameraDescription> _cameras = [];
+  int _cameraIndex = 0;
 
   bool _isDetecting = false;
   bool _capturing = false;
   bool _permissionDenied = false;
+  bool _torchOn = false;
   _Guidance _guidance = _Guidance.initializing;
 
-  // Face guide circle takes up this fraction of the screen width, and is
-  // vertically centered a little above screen-middle (where a selfie
-  // camera naturally frames a face).
-  static const double _circleFraction = 0.62;
+  //Face guide oval
+  static const double _ovalWidthFraction = 0.55; // width
+  static const double _ovalAspect = 0.86; // height
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (kUiPreviewMode) {
+      //preview mode
+      _guidance = _Guidance.noFace;
+      return;
+    }
     _faceDetector = FaceDetector(
       options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
     );
     _initCamera();
   }
 
-  Future<void> _initCamera() async {
+  Future<void> _initCamera({int? preferredIndex}) async {
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) throw CameraException('noCamera', 'No camera found');
-      final front = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
-      );
+      _cameras = cameras;
+
+      int index = preferredIndex ?? _cameraIndex;
+      if (preferredIndex == null) {
+        final frontIndex = cameras.indexWhere(
+          (c) => c.lensDirection == CameraLensDirection.front,
+        );
+        index = frontIndex != -1 ? frontIndex : 0;
+      }
+      index = index.clamp(0, cameras.length - 1);
+
       final controller = CameraController(
-        front,
+        cameras[index],
         ResolutionPreset.medium,
         enableAudio: false,
         imageFormatGroup: Platform.isAndroid
@@ -84,15 +91,41 @@ class _CameraScreenState extends State<CameraScreen>
         controller.dispose();
         return;
       }
+      await _controller?.dispose();
       setState(() {
         _controller = controller;
+        _cameraIndex = index;
         _permissionDenied = false;
+        _torchOn = false;
         _guidance = _Guidance.noFace;
       });
       await controller.startImageStream(_onFrame);
     } catch (_) {
       if (!mounted) return;
       setState(() => _permissionDenied = true);
+    }
+  }
+
+  Future<void> _flipCamera() async {
+    if (kUiPreviewMode || _cameras.length < 2 || _capturing) return;
+    final next = (_cameraIndex + 1) % _cameras.length;
+    await _controller?.stopImageStream();
+    await _initCamera(preferredIndex: next);
+  }
+
+  Future<void> _toggleTorch() async {
+    final controller = _controller;
+    if (kUiPreviewMode ||
+        controller == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+    try {
+      final next = _torchOn ? FlashMode.off : FlashMode.torch;
+      await controller.setFlashMode(next);
+      if (mounted) setState(() => _torchOn = !_torchOn);
+    } catch (_) {
+      // Some devices don't support torch mode — ignore the error.
     }
   }
 
@@ -106,6 +139,7 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (kUiPreviewMode) return;
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     if (state == AppLifecycleState.inactive ||
@@ -117,8 +151,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  // -- Per-frame analysis --------------------------------------------
-
+  //Per frame analysis
   Future<void> _onFrame(CameraImage image) async {
     if (_isDetecting || _capturing || _faceDetector == null) return;
     _isDetecting = true;
@@ -156,10 +189,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  /// Cheap lighting proxy: average value of the luma (Y) plane, which is
-  /// the first plane for both NV21 (Android) and BGRA8888 (iOS treated
-  /// as raw bytes here) — good enough to flag "too dark" / "too bright"
-  /// without a full YUV->RGB conversion every frame.
+  //too dark , too bright
   double _estimateBrightness(CameraImage image) {
     final bytes = image.planes.first.bytes;
     if (bytes.isEmpty) return 128;
@@ -197,7 +227,7 @@ class _CameraScreenState extends State<CameraScreen>
       );
     }
 
-    // iOS: planes come as separate buffers — concatenate into one.
+    // iOS planes come as separate buffers oncatenate into one.
     final buffer = WriteBuffer();
     for (final plane in image.planes) {
       buffer.putUint8List(plane.bytes);
@@ -224,8 +254,6 @@ class _CameraScreenState extends State<CameraScreen>
 
     const centerTolerance = 0.12;
     if (dx.abs() > centerTolerance || dy.abs() > centerTolerance) {
-      // The front-camera preview is mirrored, so a face left-of-center
-      // in the raw sensor frame appears right-of-center on screen.
       if (dx.abs() >= dy.abs()) {
         return dx > 0 ? _Guidance.moveLeft : _Guidance.moveRight;
       }
@@ -239,13 +267,22 @@ class _CameraScreenState extends State<CameraScreen>
     return _Guidance.ready;
   }
 
-  // -- Capture ----------------------------------------------------------
-
+  //Capture
   Future<void> _capture() async {
-    final controller = _controller;
-    if (controller == null || _guidance != _Guidance.ready || _capturing) {
+    if (_guidance != _Guidance.ready || _capturing) return;
+
+    if (kUiPreviewMode) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ProcessingScreen(imagePath: null),
+        ),
+      );
       return;
     }
+
+    final controller = _controller;
+    if (controller == null) return;
     setState(() => _capturing = true);
     try {
       await controller.stopImageStream();
@@ -266,18 +303,17 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  // -- UI -----------------------------------------------------------------
-
-  String get _statusMessage {
+  //Ui instruction
+  String get _pillMessage {
     switch (_guidance) {
       case _Guidance.initializing:
         return 'Starting camera…';
       case _Guidance.noFace:
-        return 'Your face here';
+        return 'Move to the center';
       case _Guidance.tooDark:
-        return 'Lighting is too low — find a brighter spot';
+        return 'Lighting is too low';
       case _Guidance.tooBright:
-        return 'Too bright — soften the light a little';
+        return 'Too bright';
       case _Guidance.moveCloser:
         return 'Move closer';
       case _Guidance.moveBack:
@@ -287,9 +323,21 @@ class _CameraScreenState extends State<CameraScreen>
       case _Guidance.moveRight:
         return 'Move slightly right';
       case _Guidance.centerFace:
-        return 'Place your face inside the frame';
+        return 'Move to the center';
       case _Guidance.ready:
         return 'Perfect! Hold still';
+    }
+  }
+
+  IconData get _pillIcon {
+    switch (_guidance) {
+      case _Guidance.ready:
+        return Icons.check;
+      case _Guidance.tooDark:
+      case _Guidance.tooBright:
+        return Icons.wb_sunny_outlined;
+      default:
+        return Icons.arrow_downward;
     }
   }
 
@@ -318,13 +366,24 @@ class _CameraScreenState extends State<CameraScreen>
           if (_controller != null && _controller!.value.isInitialized)
             Center(child: CameraPreview(_controller!))
           else
-            Container(color: Colors.black),
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF2A2A2E), Color(0xFF151517)],
+                ),
+              ),
+            ),
 
-          // Dark scrim with a circular window cut out around the face
-          // guide, ringed in a color that reflects the current guidance.
-          _FaceMaskOverlay(
-            circleFraction: _circleFraction,
+          // Dark scrim with an oval
+          _FaceOvalOverlay(
+            widthFraction: _ovalWidthFraction,
+            aspect: _ovalAspect,
             ringColor: _ringColor,
+            showPlaceholder:
+                _guidance == _Guidance.noFace ||
+                _guidance == _Guidance.initializing,
           ),
 
           SafeArea(
@@ -335,15 +394,12 @@ class _CameraScreenState extends State<CameraScreen>
                 if (_permissionDenied)
                   _buildPermissionDenied()
                 else ...[
-                  _buildStatusPill(),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Use natural lighting for best results',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
+                  _buildInstructionPill(),
+                  const SizedBox(height: 14),
                 ],
                 const SizedBox(height: 28),
-                if (!_permissionDenied) _buildCaptureButton(),
+                if (!_permissionDenied) _buildBottomControls(),
+                if (kUiPreviewMode) _buildPreviewStateChips(),
                 const SizedBox(height: 24),
               ],
             ),
@@ -357,64 +413,79 @@ class _CameraScreenState extends State<CameraScreen>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Colors.white24,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-            onPressed: () => Navigator.pop(context),
+          _circleButton(
+            icon: Icons.chevron_left,
+            onTap: () => Navigator.pop(context),
           ),
-          const Expanded(
-            child: Text(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
               'Face Scan',
-              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const SizedBox(width: 40), // balances the back button for centering
+          _circleButton(
+            icon: _torchOn ? Icons.flash_on : Icons.flash_off_outlined,
+            onTap: _toggleTorch,
+            highlighted: _torchOn,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusPill() {
+  Widget _circleButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool highlighted = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: highlighted ? AppColors.gold : Colors.white24,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildInstructionPill() {
     final ready = _guidance == _Guidance.ready;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
-        color: ready
-            ? AppColors.sage.withOpacity(0.9)
-            : Colors.black.withOpacity(0.55),
+        color: ready ? AppColors.sage : Colors.white,
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            ready ? Icons.check_circle : Icons.info_outline,
-            size: 16,
-            color: Colors.white,
+            _pillIcon,
+            size: 14,
+            color: ready ? Colors.white : AppColors.charcoal,
           ),
           const SizedBox(width: 8),
           Text(
-            _statusMessage,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
+            _pillMessage,
+            style: TextStyle(
+              color: ready ? Colors.white : AppColors.charcoal,
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -445,7 +516,7 @@ class _CameraScreenState extends State<CameraScreen>
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white54),
             ),
-            onPressed: _initCamera,
+            onPressed: () => _initCamera(),
             child: const Text('Try Again'),
           ),
         ],
@@ -453,46 +524,94 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
-  Widget _buildCaptureButton() {
+  Widget _buildBottomControls() {
     final ready = _guidance == _Guidance.ready && !_capturing;
-    return GestureDetector(
-      onTap: ready ? _capture : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 76,
-        height: 76,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 4),
-          color: ready ? AppColors.sage : Colors.white24,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _circleButton(icon: Icons.cameraswitch_outlined, onTap: _flipCamera),
+        const SizedBox(width: 28),
+        GestureDetector(
+          onTap: ready ? _capture : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 4),
+              color: ready ? Colors.white : Colors.white24,
+            ),
+            child: _capturing
+                ? const Padding(
+                    padding: EdgeInsets.all(22),
+                    child: CircularProgressIndicator(
+                      color: AppColors.charcoal,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : null,
+          ),
         ),
-        child: _capturing
-            ? const Padding(
-                padding: EdgeInsets.all(22),
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
+        const SizedBox(width: 28),
+        // Decorative
+        Container(
+          width: 38,
+          height: 38,
+          decoration: const BoxDecoration(
+            color: Colors.white12,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  //UI preview
+  Widget _buildPreviewStateChips() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: SizedBox(
+        height: 32,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: _Guidance.values.map((g) {
+            final selected = g == _guidance;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(
+                  g.name,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: selected ? Colors.black : Colors.white,
+                  ),
                 ),
-              )
-            : Icon(
-                Icons.camera_alt,
-                color: ready ? Colors.white : Colors.white54,
-                size: 28,
+                selected: selected,
+                selectedColor: Colors.white,
+                backgroundColor: Colors.white24,
+                onSelected: (_) => setState(() => _guidance = g),
               ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
 }
 
-/// Paints a dark scrim over the whole preview with a circular window cut
-/// out in the middle (the face guide), ringed in [ringColor].
-class _FaceMaskOverlay extends StatelessWidget {
-  final double circleFraction;
+class _FaceOvalOverlay extends StatelessWidget {
+  final double widthFraction;
+  final double aspect;
   final Color ringColor;
+  final bool showPlaceholder;
 
-  const _FaceMaskOverlay({
-    required this.circleFraction,
+  const _FaceOvalOverlay({
+    required this.widthFraction,
+    required this.aspect,
     required this.ringColor,
+    required this.showPlaceholder,
   });
 
   @override
@@ -500,11 +619,35 @@ class _FaceMaskOverlay extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        final diameter = size.width * circleFraction;
+        final ovalWidth = size.width * widthFraction;
+        final ovalHeight = ovalWidth / aspect;
+        final center = Offset(size.width / 2, size.height * 0.42);
+
         return IgnorePointer(
-          child: CustomPaint(
-            size: size,
-            painter: _FaceMaskPainter(diameter: diameter, ringColor: ringColor),
+          child: Stack(
+            children: [
+              CustomPaint(
+                size: size,
+                painter: _FaceOvalPainter(
+                  center: center,
+                  ovalSize: Size(ovalWidth, ovalHeight),
+                  ringColor: ringColor,
+                ),
+              ),
+              if (showPlaceholder)
+                Positioned(
+                  left: center.dx - ovalWidth / 2,
+                  top: center.dy - ovalHeight / 2,
+                  width: ovalWidth,
+                  height: ovalHeight,
+                  child: const Center(
+                    child: Text(
+                      'Your face here',
+                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                    ),
+                  ),
+                ),
+            ],
           ),
         );
       },
@@ -512,31 +655,47 @@ class _FaceMaskOverlay extends StatelessWidget {
   }
 }
 
-class _FaceMaskPainter extends CustomPainter {
-  final double diameter;
+class _FaceOvalPainter extends CustomPainter {
+  final Offset center;
+  final Size ovalSize;
   final Color ringColor;
 
-  _FaceMaskPainter({required this.diameter, required this.ringColor});
+  _FaceOvalPainter({
+    required this.center,
+    required this.ovalSize,
+    required this.ringColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.44);
-    final radius = diameter / 2;
+    final outerRect = Rect.fromCenter(
+      center: center,
+      width: ovalSize.width + 26,
+      height: ovalSize.height + 26,
+    );
+    final innerRect = Rect.fromCenter(
+      center: center,
+      width: ovalSize.width,
+      height: ovalSize.height,
+    );
 
+    // Scrim with the inner oval cut out.
     final scrimPath = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
-    final holePath = Path()
-      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    final holePath = Path()..addOval(innerRect);
     final maskPath = Path.combine(
       PathOperation.difference,
       scrimPath,
       holePath,
     );
+    canvas.drawPath(maskPath, Paint()..color = Colors.black.withOpacity(0.6));
 
-    canvas.drawPath(maskPath, Paint()..color = Colors.black.withOpacity(0.55));
-    canvas.drawCircle(
-      center,
-      radius,
+    // Dashed outer oval.
+    _drawDashedOval(canvas, outerRect, Colors.white54, 1.5, 6, 5);
+
+    // Solid inner ring, colored by guidance state.
+    canvas.drawOval(
+      innerRect,
       Paint()
         ..color = ringColor
         ..style = PaintingStyle.stroke
@@ -544,9 +703,37 @@ class _FaceMaskPainter extends CustomPainter {
     );
   }
 
+  void _drawDashedOval(
+    Canvas canvas,
+    Rect rect,
+    Color color,
+    double strokeWidth,
+    double dashWidth,
+    double gapWidth,
+  ) {
+    final path = Path()..addOval(rect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    for (final metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final next = distance + dashWidth;
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          paint,
+        );
+        distance = next + gapWidth;
+      }
+    }
+  }
+
   @override
-  bool shouldRepaint(covariant _FaceMaskPainter oldDelegate) {
-    return oldDelegate.diameter != diameter ||
+  bool shouldRepaint(covariant _FaceOvalPainter oldDelegate) {
+    return oldDelegate.center != center ||
+        oldDelegate.ovalSize != ovalSize ||
         oldDelegate.ringColor != ringColor;
   }
 }

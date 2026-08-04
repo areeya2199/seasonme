@@ -8,9 +8,6 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
 
-/// What we tell the user about a photo they just picked, checked in
-/// priority order: lighting problems first, then "no face", then
-/// framing (too small / too large / off-center), then [ready].
 enum _Guidance {
   none,
   analyzing,
@@ -23,10 +20,7 @@ enum _Guidance {
   ready,
 }
 
-/// Upload Photo — lets the user pick an existing photo from their device
-/// and runs the same lighting + face-framing checks used in the live
-/// camera flow (camera_screen.dart), just once on the still image instead
-/// of frame-by-frame. Only lets them continue once the photo passes.
+//Upload Photo
 class UploadPhotoScreen extends StatefulWidget {
   const UploadPhotoScreen({super.key});
 
@@ -55,8 +49,7 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
     super.dispose();
   }
 
-  // -- Pick + analyze --------------------------------------------------
-
+  //pick
   Future<void> _pickImage() async {
     final xfile = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -110,8 +103,7 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
     }
   }
 
-  /// Same idea as the live camera check: average luma across a sampled
-  /// grid of pixels, used as a simple too-dark / too-bright proxy.
+  //too dark/too bright
   double _estimateBrightness(img.Image image) {
     final stepX = (image.width / 60).clamp(1, image.width).round();
     final stepY = (image.height / 60).clamp(1, image.height).round();
@@ -147,37 +139,32 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
 
   void _continue() {
     if (_guidance != _Guidance.ready || _imagePath == null) return;
-    // NOTE: matches the app's existing Upload flow (select_screen.dart
-    // used to go straight to QuestionnaireScreen) — this just adds the
-    // photo-quality check in front of it. TODO: once QuestionnaireScreen
-    // accepts an imagePath parameter, pass `_imagePath` through here so
-    // the checked photo carries forward instead of being picked again.
+    //ถ้า photo ผ่านแล้วให้ไปหน้าถัดไป(QuestionnaireScreen)
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const QuestionnaireScreen()),
     );
   }
 
-  // -- UI ----------------------------------------------------------------
-
+  //UI
   String get _statusMessage {
     switch (_guidance) {
       case _Guidance.none:
-        return 'Choose a clear, front-facing photo';
+        return 'Choose a clear, front ,facing photo';
       case _Guidance.analyzing:
         return 'Checking your photo…';
       case _Guidance.noFace:
-        return "We couldn't find a face — try another photo";
+        return "We couldn't find a face ,try another photo";
       case _Guidance.tooDark:
-        return 'This photo looks too dark — try a brighter one';
+        return 'This photo looks too dark ,try a brighter one';
       case _Guidance.tooBright:
-        return 'This photo looks overexposed — try softer light';
+        return 'This photo looks overexposed ,try softer light';
       case _Guidance.offCenter:
-        return 'Your face isn\'t centered — choose a more centered photo';
+        return 'Your face isn\'t centered ,choose a more centered photo';
       case _Guidance.tooSmall:
-        return 'Your face is too small — try a closer shot';
+        return 'Your face is too small ,try a closer shot';
       case _Guidance.tooLarge:
-        return 'Too close / cropped — try a photo with more space around your face';
+        return 'Too close / cropped ,try a photo with more space around your face';
       case _Guidance.ready:
         return 'Perfect! This photo looks great';
     }

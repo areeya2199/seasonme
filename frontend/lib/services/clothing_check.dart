@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import '../data/season_palette.dart';
 
-/// Result of scanning a clothing photo for its dominant color.
+//Result of scanning a clothing photo for its dominant color.
 class DominantColorResult {
   final Color color;
   final double hue;
@@ -17,7 +17,7 @@ class DominantColorResult {
   );
 }
 
-/// Verdict from comparing a detected clothing color against a season.
+//comparing clothing colors
 class OutfitMatchVerdict {
   final bool isGoodMatch;
   final String label; // 'Great Match' / 'Good Match' / 'Not Ideal'
@@ -37,10 +37,6 @@ class OutfitMatchVerdict {
 class ClothingColorService {
   ClothingColorService._();
 
-  /// Reads [file], down-samples it, and finds the dominant *meaningful*
-  /// color — i.e. the most common hue weighted by saturation, so busy
-  /// backgrounds, shadows, and near-white/near-black pixels (which are
-  /// rarely "the color of the garment") don't skew the result.
   static Future<DominantColorResult> extractDominantColor(File file) async {
     final bytes = await file.readAsBytes();
     final decoded = img.decodeImage(bytes);
@@ -49,7 +45,7 @@ class ClothingColorService {
     }
     final resized = img.copyResize(decoded, width: 160);
 
-    // 24 hue bins of 15° each.
+    //24 hue bins of 15° each.
     final hueWeight = List<double>.filled(24, 0);
     final satSum = List<double>.filled(24, 0);
     final lightSum = List<double>.filled(24, 0);
@@ -95,11 +91,6 @@ class ClothingColorService {
     return DominantColorResult(color, avgHue, avgSat, avgLight);
   }
 
-  /// Compares a detected color against [season]'s core hue/sat/light
-  /// window. Matching is tone-based, not pixel-exact — a garment photo
-  /// under warm indoor light or a slightly different shade than any
-  /// single swatch can still register as a good match as long as it
-  /// falls in the same temperature/depth/chroma family.
   static OutfitMatchVerdict evaluate(
     SeasonKey season,
     DominantColorResult detected,
@@ -124,9 +115,6 @@ class ClothingColorService {
     final lightScore = (1 - ((detected.lightness - lightMid).abs() / 0.35))
         .clamp(0.0, 1.0);
 
-    // Near-neutral garments (black / white / gray / navy-ish) are
-    // wardrobe basics that work across most seasons, so weight hue less
-    // and depth/chroma more for them.
     final isNeutral = detected.saturation < 0.15;
     final overall = isNeutral
         ? (0.25 * hueScore + 0.35 * satScore + 0.40 * lightScore)
@@ -163,9 +151,7 @@ class ClothingColorService {
     final profile = SeasonPaletteData.getProfile(season);
     SwatchItem? best;
     double bestDist = double.infinity;
-    // Some SeasonProfile implementations may not expose a `clothing` getter
-    // with that exact name. Use a dynamic access to avoid a compile-time
-    // error while still iterating the provided swatches at runtime.
+
     final clothingIterable = (profile as dynamic).clothing as Iterable?;
     if (clothingIterable == null) return null;
     for (final swatch in clothingIterable) {

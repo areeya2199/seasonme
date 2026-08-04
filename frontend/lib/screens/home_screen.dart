@@ -3,11 +3,10 @@ import '../data/season_palette.dart';
 import '../services/analysis_history.dart';
 import '../theme/app_theme.dart';
 import 'select_screen.dart';
-import 'clothing_screen.dart';
 import 'result_screen.dart';
 import 'profile_screen.dart';
 
-/// Home — "Hello" / Start Analysis / Outfit Check / My Palette / History
+//Home
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -27,11 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadHistory() async {
-    // NOTE: on a brand-new install with zero saved analyses ever,
-    // AnalysisHistoryService seeds one demo entry per season (all 12) so
-    // this screen shows what a full history looks like — see
-    // analysis_history.dart. Real analyses (and deletes) take over from
-    // there via addEntry/removeAt.
     final history = await AnalysisHistoryService.getAll();
     if (!mounted) return;
     setState(() {
@@ -107,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           child: CircleAvatar(
             radius: 22,
-            backgroundColor: Color(0xffecd5f1),
+            backgroundColor: const Color(0xffecd5f1),
             child: const Icon(Icons.person, color: Color(0xff543f59)),
           ),
         ),
@@ -115,7 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // "Your palette awaits" hero card with Begin Analysis button
   Widget _buildHeroCard(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -166,9 +159,9 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Color.fromARGB(255, 233, 172, 187),
-              foregroundColor: Color.fromARGB(255, 255, 194, 196),
-              shadowColor: Color.fromARGB(255, 205, 150, 182),
+              backgroundColor: const Color.fromARGB(255, 233, 172, 187),
+              foregroundColor: const Color.fromARGB(255, 255, 194, 196),
+              shadowColor: const Color.fromARGB(255, 205, 150, 182),
               elevation: 1,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),
@@ -252,6 +245,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ..._history.asMap().entries.map((entry) {
             final index = entry.key;
             final item = entry.value;
+            //icon
+            final groupColor = SeasonPaletteData.groupColorOf(item.season);
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: SoftCard(
@@ -277,13 +272,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppColors.blush.withOpacity(0.3),
+                        color: groupColor.withOpacity(0.7),
                         borderRadius: BorderRadius.circular(60),
-                      ),
-                      child: const Icon(
-                        Icons.color_lens_outlined,
-                        color: AppColors.charcoal,
-                        size: 20,
                       ),
                     ),
                     const SizedBox(width: 12),

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 //name
@@ -7,7 +8,7 @@ class SwatchItem {
   const SwatchItem(this.name, this.color);
 }
 
-/// The 12 Personal Color seasons.
+//4 seasons + 4 deep colors for night mode
 enum SeasonKey { Winter, Spring, Autumn, Summer }
 
 class SeasonCore {
@@ -47,19 +48,20 @@ class SeasonCore {
   });
 }
 
-/// [ResultScreen] or [ClothingScreen] needs to display or compare against.
 class SeasonProfile {
   final SeasonCore core;
-  final List<SwatchItem> yourColorPalette; //10
-  final List<SwatchItem> hair; // 10
-  final List<SwatchItem> eyeMakeup; // 10
-  final List<SwatchItem> blush; // 10
-  final List<SwatchItem> lipstick; // 10
+  final List<SwatchItem> tops; // 63 สุ่ม 9
+  final List<SwatchItem> bottoms; // 63 สุ่ม 9
+  final List<SwatchItem> hair; // 9
+  final List<SwatchItem> eyeMakeup; // 9
+  final List<SwatchItem> blush; // 9
+  final List<SwatchItem> lipstick; // 9
   final List<SwatchItem> jewelry; // 5
 
   SeasonProfile({
     required this.core,
-    required this.yourColorPalette,
+    required this.tops,
+    required this.bottoms,
     required this.hair,
     required this.eyeMakeup,
     required this.blush,
@@ -88,7 +90,7 @@ class SeasonPaletteData {
     'Cool ',
   ];
 
-  static const SeasonCore _darkWinter = SeasonCore(
+  static const SeasonCore _Winter = SeasonCore(
     key: SeasonKey.Winter,
     displayName: 'Winter',
     undertone: 'Cool undertone',
@@ -176,7 +178,7 @@ class SeasonPaletteData {
 
   //Spring
 
-  static const SeasonCore _lightSpring = SeasonCore(
+  static const SeasonCore _Spring = SeasonCore(
     key: SeasonKey.Spring,
     displayName: 'Spring',
     undertone: 'Warm undertone',
@@ -262,7 +264,7 @@ class SeasonPaletteData {
 
   // Autumn
 
-  static const SeasonCore _softAutumn = SeasonCore(
+  static const SeasonCore _Autumn = SeasonCore(
     key: SeasonKey.Autumn,
     displayName: 'Autumn',
     undertone: 'Warm undertone',
@@ -347,9 +349,9 @@ class SeasonPaletteData {
   );
 
   // Summer
-  static const SeasonCore _softSummer = SeasonCore(
+  static const SeasonCore _Summer = SeasonCore(
     key: SeasonKey.Summer,
-    displayName: 'Soft Summer',
+    displayName: 'Summer',
     undertone: 'Cool undertone',
     description:
         'A cool, blended, and gentle season muted neutrals with understated charm.',
@@ -432,10 +434,10 @@ class SeasonPaletteData {
   );
 
   static final Map<SeasonKey, SeasonCore> _cores = {
-    SeasonKey.Winter: _darkWinter,
-    SeasonKey.Spring: _lightSpring,
-    SeasonKey.Autumn: _softAutumn,
-    SeasonKey.Summer: _softSummer,
+    SeasonKey.Winter: _Winter,
+    SeasonKey.Spring: _Spring,
+    SeasonKey.Autumn: _Autumn,
+    SeasonKey.Summer: _Summer,
   };
 
   static String _nameFor(List<String> flavors, List<String> mods, int i) {
@@ -474,14 +476,26 @@ class SeasonPaletteData {
   }
 
   static SeasonProfile _build(SeasonCore core) {
-    final palette = _generate(
+    //ไม่เอา เดี๋ยวแก้
+    final tops = _generate(
       hueAnchors: core.hueAnchors,
       satMin: core.satMin,
       satMax: core.satMax,
       lightMin: core.lightMin,
       lightMax: core.lightMax,
       flavors: core.flavors,
-      count: 10,
+      count: 63,
+    );
+
+    //ไม่เอา เดี๋ยวแก้
+    final bottoms = _generate(
+      hueAnchors: core.hueAnchors,
+      satMin: (core.satMin - 0.25).clamp(0.05, 1.0),
+      satMax: core.satMax,
+      lightMin: (core.lightMin - 0.15).clamp(0.05, 1.0),
+      lightMax: (core.lightMax + 0.15).clamp(0.0, 0.95),
+      flavors: core.flavors,
+      count: 63,
     );
 
     final hair =
@@ -616,11 +630,13 @@ class SeasonPaletteData {
 
     return SeasonProfile(
       core: core,
-      yourColorPalette: palette,
-      hair: hair,
-      eyeMakeup: eyeMakeup,
-      blush: blush,
-      lipstick: lipstick,
+      tops: tops,
+      bottoms: bottoms,
+      //ตัดเหลือ9
+      hair: hair.take(9).toList(),
+      eyeMakeup: eyeMakeup.take(9).toList(),
+      blush: blush.take(9).toList(),
+      lipstick: lipstick.take(9).toList(),
       jewelry: jewelry,
     );
   }
@@ -634,4 +650,66 @@ class SeasonPaletteData {
   static SeasonCore coreOf(SeasonKey key) => _cores[key]!;
 
   static String labelOf(SeasonKey key) => _cores[key]!.displayName;
+
+  static const Color _springAccent = Color.fromARGB(
+    255,
+    255,
+    227,
+    151,
+  ); //spring
+  static const Color _summerAccent = Color.fromARGB(
+    255,
+    167,
+    199,
+    255,
+  ); //summer
+  static const Color _autumnAccent = Color.fromARGB(
+    255,
+    235,
+    168,
+    114,
+  ); //autumn
+  static const Color _winterAccent = Color.fromARGB(
+    255,
+    142,
+    155,
+    239,
+  ); //winter
+
+  static Color groupColorOf(SeasonKey key) {
+    switch (key) {
+      case SeasonKey.Spring:
+        return _springAccent;
+      case SeasonKey.Summer:
+        return _summerAccent;
+      case SeasonKey.Autumn:
+        return _autumnAccent;
+      case SeasonKey.Winter:
+        return _winterAccent;
+    }
+  }
+
+  static SwatchItem toNightVariant(SwatchItem item) {
+    final hsl = HSLColor.fromColor(item.color);
+    final deepened = hsl
+        .withSaturation((hsl.saturation + 0.18).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness - 0.22).clamp(0.08, 1.0));
+    return SwatchItem('Night ${item.name}', deepened.toColor());
+  }
+
+  /// Maps [toNightVariant] over a whole category list.
+  static List<SwatchItem> nightVariants(List<SwatchItem> items) {
+    return items.map(toNightVariant).toList();
+  }
+
+  //randomly
+  static List<SwatchItem> pickRandom(
+    List<SwatchItem> pool,
+    int count, [
+    Random? random,
+  ]) {
+    final r = random ?? Random();
+    final shuffled = List<SwatchItem>.from(pool)..shuffle(r);
+    return shuffled.take(count).toList();
+  }
 }
