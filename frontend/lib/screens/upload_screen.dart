@@ -181,11 +181,7 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
 
   // void _continue() {
   //   if (_guidance != _Guidance.ready || _imagePath == null) return;
-  //   // NOTE: matches the app's existing Upload flow (select_screen.dart
-  //   // used to go straight to QuestionnaireScreen) — this just adds the
-  //   // photo-quality check in front of it. TODO: once QuestionnaireScreen
-  //   // accepts an imagePath parameter, pass `_imagePath` through here so
-  //   // the checked photo carries forward instead of being picked again.
+  //   
   //   Navigator.push(
   //     context,
   //     MaterialPageRoute(builder: (_) => const QuestionnaireScreen()),

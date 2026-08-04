@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+
 import 'services/api_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
+
   runApp(const SeasonMe());
 }
 
@@ -45,8 +51,15 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("SeasonMe")),
-      body: Center(child: Text(message, style: const TextStyle(fontSize: 30))),
+      appBar: AppBar(
+        title: const Text("SeasonMe"),
+      ),
+      body: Center(
+        child: Text(
+          message,
+          style: const TextStyle(fontSize: 30),
+        ),
+      ),
     );
   }
 }

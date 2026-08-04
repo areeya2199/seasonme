@@ -11,7 +11,7 @@ import 'result_screen.dart';
 
 //Analyzing your Personal Color
 class ProcessingScreen extends StatefulWidget {
-  final String imagePath;
+  final String? imagePath;
   // final String season;
   final Map<int, String> answers;
 
@@ -45,7 +45,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     request.files.add(
       await http.MultipartFile.fromPath(
         "file",
-        widget.imagePath,
+        widget.imagePath!,
       ),
     );
 

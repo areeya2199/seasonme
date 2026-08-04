@@ -1,4 +1,4 @@
-package com.example.frontend
+package com.example.seasonme
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show WriteBuffer;
@@ -10,6 +10,8 @@ import '../config/preview.dart';
 import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
 import 'processing_screen.dart';
+import 'questionnaire_screen.dart';
+
 
 enum _Guidance {
   initializing,
@@ -271,6 +273,17 @@ class _CameraScreenState extends State<CameraScreen>
 
   }
 
+  // -- Capture ----------------------------------------------------------
+
+  // Future<void> _capture() async {
+  //   final controller = _controller;
+    
+  //   if (controller == null || _guidance != _Guidance.ready || _capturing) {
+  //     return;
+  //   }
+  //   return _Guidance.ready;
+  // }
+
   //Capture
   Future<void> _capture() async {
     if (_guidance != _Guidance.ready || _capturing) return;
@@ -279,7 +292,10 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const ProcessingScreen(imagePath: "", answers: {}),
+          builder: (_) => const ProcessingScreen(
+            imagePath: null,
+            answers: {},
+          ),
         ),
       );
     }
@@ -308,8 +324,9 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  //Ui instruction
-  String get _pillMessage {
+  // -- UI -----------------------------------------------------------------
+
+  String get _statusMessage {
     switch (_guidance) {
       case _Guidance.initializing:
         return 'Starting camera…';
@@ -334,6 +351,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
+String get _pillMessage => _statusMessage;
   IconData get _pillIcon {
     switch (_guidance) {
       case _Guidance.ready:
@@ -411,7 +429,7 @@ class _CameraScreenState extends State<CameraScreen>
           ),
         ],
       ),
-    );
+    );  
   }
 
   Widget _buildTopBar(BuildContext context) {
