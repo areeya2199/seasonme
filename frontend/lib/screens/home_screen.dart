@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadHistory();
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _loadHistory() async { 
     final history = await AnalysisHistoryService.getAll();
     if (!mounted) return;
     setState(() {
@@ -39,7 +39,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _removeHistoryItem(int index) async {
-    setState(() => _history.removeAt(index));
+    setState(() {
+  _history.removeAt(index);
+    });
     await AnalysisHistoryService.removeAt(index);
     if (_history.isEmpty && mounted) {
       setState(() => _deleteMode = false);
@@ -109,20 +111,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeroCard(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xfffee8f2),
-            Color(0xffffebe9),
-            Color(0xffffede0),
-            Color(0xfffbecee),
-            Color(0xfff4eafd),
+        Widget _buildHeroCard(BuildContext context) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xfffee8f2),
+                  Color(0xffffebe9),
+                  Color(0xffffede0),
+                  Color(0xfffbecee),
+                  Color(0xfff4eafd),
           ],
         ),
         borderRadius: BorderRadius.circular(24),

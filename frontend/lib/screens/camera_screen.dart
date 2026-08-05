@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show WriteBuffer;
@@ -8,7 +8,10 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import '../config/preview.dart';
 import '../theme/app_theme.dart';
+import 'questionnaire_screen.dart';
 import 'processing_screen.dart';
+
+
 
 enum _Guidance {
   initializing,
@@ -170,6 +173,7 @@ class _CameraScreenState extends State<CameraScreen>
         next = lightIssue ?? _Guidance.noFace;
       } else {
         final faces = await _faceDetector!.processImage(inputImage);
+        print("Faces detected: ${faces.length}");
         if (lightIssue != null) {
           next = lightIssue;
         } else if (faces.isEmpty) {
@@ -264,8 +268,21 @@ class _CameraScreenState extends State<CameraScreen>
     if (faceWidthFraction < 0.32) return _Guidance.moveCloser;
     if (faceWidthFraction > 0.68) return _Guidance.moveBack;
 
+    // print(face.boundingBox);
     return _Guidance.ready;
+
   }
+
+  // -- Capture ----------------------------------------------------------
+
+  // Future<void> _capture() async {
+  //   final controller = _controller;
+    
+  //   if (controller == null || _guidance != _Guidance.ready || _capturing) {
+  //     return;
+  //   }
+  //   return _Guidance.ready;
+  // }
 
   //Capture
   Future<void> _capture() async {
@@ -275,10 +292,12 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const ProcessingScreen(imagePath: null),
+          builder: (_) => const ProcessingScreen(
+            imagePath: null,
+            answers: {},
+          ),
         ),
       );
-      return;
     }
 
     final controller = _controller;
@@ -291,9 +310,11 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ProcessingScreen(imagePath: file.path),
-        ),
-      );
+          builder: (_) => QuestionnaireScreen(
+          imagePath: file.path,
+    ),
+  ),
+);
     } catch (_) {
       if (mounted) setState(() => _capturing = false);
       final c = _controller;
@@ -303,8 +324,9 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  //Ui instruction
-  String get _pillMessage {
+  // -- UI -----------------------------------------------------------------
+
+  String get _statusMessage {
     switch (_guidance) {
       case _Guidance.initializing:
         return 'Starting camera…';
@@ -329,6 +351,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
+String get _pillMessage => _statusMessage;
   IconData get _pillIcon {
     switch (_guidance) {
       case _Guidance.ready:
@@ -406,7 +429,7 @@ class _CameraScreenState extends State<CameraScreen>
           ),
         ],
       ),
-    );
+    );  
   }
 
   Widget _buildTopBar(BuildContext context) {
