@@ -34,7 +34,7 @@ class _ResultScreenState extends State<ResultScreen> {
     super.initState();
     _profile = SeasonPaletteData.getProfile(widget.season);
     final random = Random();
-    //สุ่มเลือก 9 สีจาก tops และ bottoms
+    
     _dayTops = SeasonPaletteData.pickRandom(_profile.tops, 9, random);
     _dayBottoms = SeasonPaletteData.pickRandom(_profile.bottoms, 9, random);
 

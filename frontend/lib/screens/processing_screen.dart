@@ -9,7 +9,7 @@ import '../data/season_palette.dart';
 import '../theme/app_theme.dart';
 import 'result_screen.dart';
 
-//Analyzing your Personal Color
+
 class ProcessingScreen extends StatefulWidget {
   final String? imagePath;
   // final String season;
@@ -127,13 +127,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   }
 }
 
-  /// TODO: replace with the real result from the color-analysis backend
-  /// (upload widget.imagePath + questionnaire answers, get a SeasonKey
-  /// back). Picking randomly here only stands in until that API exists.
-  // SeasonKey _mockAnalysisResult() {
-  //   return SeasonKey.values[Random().nextInt(SeasonKey.values.length)];
-  // }
-
+ 
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(

@@ -143,6 +143,7 @@ def analyze_skin(image, answers):
     )
 
     hue, sat, val, _ = mean_hsv
+    
 
 
 
@@ -197,7 +198,7 @@ def analyze_skin(image, answers):
         hue_angle += 360
 
 
-    # ---------------- Questionnaire Score ----------------
+    
 
     warm_score = 0.0
     cool_score = 0.0
@@ -207,7 +208,7 @@ def analyze_skin(image, answers):
         warm_score += 1
     elif answers["0"] == "Blue / Purple":
         cool_score += 1
-    else:  # A mix of both
+    else:  
         warm_score += 0.5
         cool_score += 0.5
 
@@ -217,7 +218,7 @@ def analyze_skin(image, answers):
         warm_score += 1
     elif answers["1"] == "Silver":
         cool_score += 1
-    else:  # Both look fine
+    else:  
         warm_score += 0.5
         cool_score += 0.5
 
@@ -227,14 +228,14 @@ def analyze_skin(image, answers):
         warm_score += 1
     elif answers["2"] == "Burns easily, rarely tans":
         cool_score += 1
-    else:  # A little of both
+    else: 
         warm_score += 0.5
         cool_score += 0.5
 
     
 
 
-# ---------------- Image Score ----------------
+
 
     if hue_angle > 60:
         image_warm = 1
@@ -244,7 +245,6 @@ def analyze_skin(image, answers):
         image_cool = 1
 
 
-# Normalize questionnaire score (0-1)
 
     warm_question = warm_score / 3
     cool_question = cool_score / 3
@@ -253,9 +253,6 @@ def analyze_skin(image, answers):
     print("cool_score =", cool_score)
     print("warm_question =", warm_question)
     print("cool_question =", cool_question)
-# ---------------- Weighted Fusion ----------------
-# Image 70%
-# Questionnaire 30%
 
     warm_total = image_warm * 0.70 + warm_question * 0.30
     cool_total = image_cool * 0.70 + cool_question * 0.30
@@ -263,8 +260,7 @@ def analyze_skin(image, answers):
     print("warm_total =", warm_total)
     print("cool_total =", cool_total)
     
-    
-# ---------------- Undertone ----------------
+
 
     if warm_total >= cool_total:
         undertone = "Warm"
@@ -273,16 +269,15 @@ def analyze_skin(image, answers):
 
     print("undertone =", undertone)
     
-# ---------------- Q4 Preference ----------------
+
 
     preference = answers["3"]
 
 
-# ---------------- Season ----------------
+
 
     if undertone == "Warm":
 
-    # Spring vs Autumn
 
         if preference == "Bright & vivid":
             season = "Spring"
@@ -291,7 +286,7 @@ def analyze_skin(image, answers):
             season = "Autumn"
 
         elif preference == "Soft & muted":
-        # ใช้รูปช่วยตัดสิน
+       
             if L_star > 66 and chroma >= 45:
                 season = "Spring"
             else:
@@ -305,7 +300,7 @@ def analyze_skin(image, answers):
 
     else:
 
-    # Summer vs Winter
+  
 
         if preference == "Soft & muted":
             season = "Summer"

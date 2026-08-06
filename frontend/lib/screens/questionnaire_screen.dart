@@ -20,7 +20,7 @@ class _QuizOption {
   _QuizOption({required this.label, required this.hint});
 }
 
-//Questionnaire — multi-step quiz, mirrors "Your wrist vein color" step
+
 class QuestionnaireScreen extends StatefulWidget {
   final String imagePath;
  
