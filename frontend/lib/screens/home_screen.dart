@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/photoguide.dart';
 import '../data/season_palette.dart';
 import '../services/analysis_history.dart';
 import '../theme/app_theme.dart';
 import 'select_screen.dart';
 import 'result_screen.dart';
 import 'profile_screen.dart';
+import 'photoguide.dart';
 
 //Home
 class HomeScreen extends StatefulWidget {
@@ -25,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadHistory();
   }
 
-  Future<void> _loadHistory() async { 
+  Future<void> _loadHistory() async {
     final history = await AnalysisHistoryService.getAll();
     if (!mounted) return;
     setState(() {
@@ -39,9 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _removeHistoryItem(int index) async {
-    setState(() {
-  _history.removeAt(index);
-    });
+    setState(() => _history.removeAt(index));
     await AnalysisHistoryService.removeAt(index);
     if (_history.isEmpty && mounted) {
       setState(() => _deleteMode = false);
@@ -111,20 +111,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-        Widget _buildHeroCard(BuildContext context) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xfffee8f2),
-                  Color(0xffffebe9),
-                  Color(0xffffede0),
-                  Color(0xfffbecee),
-                  Color(0xfff4eafd),
+  //"Your palette awaits"
+  Widget _buildHeroCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xfffee8f2),
+            Color(0xffffebe9),
+            Color(0xffffede0),
+            Color(0xfffbecee),
+            Color(0xfff4eafd),
           ],
         ),
         borderRadius: BorderRadius.circular(24),
@@ -154,7 +155,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 15),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              await showFacePhotoGuide(context);
+              if (!context.mounted) return;
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SelectScreen()),
@@ -247,7 +250,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ..._history.asMap().entries.map((entry) {
             final index = entry.key;
             final item = entry.value;
-            //icon
+            //Icon
+            //SeasonPaletteData.
             final groupColor = SeasonPaletteData.groupColorOf(item.season);
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -274,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: groupColor.withOpacity(0.7),
+                        color: groupColor.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(60),
                       ),
                     ),

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -11,7 +12,10 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  static User? get currentUser => _auth.currentUser;
+  static User? get currentUser {
+    if (kIsWeb) return null;
+    return _auth.currentUser;
+  }
 
   //Google Sign In
   static Future<UserCredential?> signInWithGoogle() async {
@@ -31,9 +35,7 @@ class AuthService {
     await GoogleSignIn().signOut();
     try {
       await FacebookAuth.instance.logOut();
-    } catch (_) {
-      // Not logged in via Facebook — nothing to do.
-    }
+    } catch (_) {}
   }
 
   static String _generateNonce([int length = 32]) {

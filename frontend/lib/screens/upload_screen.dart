@@ -106,44 +106,38 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
       if (mounted) setState(() => _guidance = _Guidance.noFace);
     }
   }
+
   Future<Map<String, dynamic>?> _uploadImage() async {
-  if (_imagePath == null) return null;
+    if (_imagePath == null) return null;
 
-  try {
-    var request = http.MultipartRequest(
-      "POST",
-      Uri.parse(
-        "http://10.0.2.2:8000/analyze",
-      ),
-    );
+    try {
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("http://10.0.2.2:8000/analyze"),
+      );
 
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        "file",
-        _imagePath!,
-      ),
-    );
+      request.files.add(await http.MultipartFile.fromPath("file", _imagePath!));
 
-    var response = await request.send();
+      var response = await request.send();
 
-    if (response.statusCode == 200) {
-      final body = await response.stream.bytesToString();
+      if (response.statusCode == 200) {
+        final body = await response.stream.bytesToString();
 
-      final data = jsonDecode(body);
+        final data = jsonDecode(body);
 
-      print("API Result:");
-      print(data);
+        print("API Result:");
+        print(data);
 
-      return data;
-    } else {
-      print("API Error: ${response.statusCode}");
+        return data;
+      } else {
+        print("API Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Upload Error: $e");
     }
-  } catch (e) {
-    print("Upload Error: $e");
-  }
 
-  return null;
-}
+    return null;
+  }
 
   //too dark/too bright
   double _estimateBrightness(img.Image image) {
@@ -179,15 +173,7 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
     return _Guidance.ready;
   }
 
-  // void _continue() {
-  //   if (_guidance != _Guidance.ready || _imagePath == null) return;
-  //   
-  //   Navigator.push(
-  //     context,
-  //     MaterialPageRoute(builder: (_) => const QuestionnaireScreen()),
-  //   );
-  // }
-    SeasonKey _convertSeason(String season) {
+  SeasonKey _convertSeason(String season) {
     switch (season.toLowerCase()) {
       case "spring":
         return SeasonKey.Spring;
@@ -203,20 +189,17 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
   }
 
   Future<void> _continue() async {
-  if (!_ready || _imagePath == null) return;
+    if (!_ready || _imagePath == null) return;
 
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => QuestionnaireScreen(
-        imagePath: _imagePath!,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuestionnaireScreen(imagePath: _imagePath!),
       ),
-    ),
-  );
-}
+    );
+  }
 
-  // -- UI ----------------------------------------------------------------
-
+  // UI
   String get _statusMessage {
     switch (_guidance) {
       case _Guidance.none:
