@@ -1,9 +1,12 @@
+//Login
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/preferences.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 
+//Login
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -13,21 +16,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
-  String? _loadingProvider;
 
-  Future<void> _handleSocialSignIn(
-    Future<dynamic> Function() signIn,
-    String providerName,
-  ) async {
+  Future<void> _handleGoogleSignIn() async {
     if (_loading) return;
-    setState(() {
-      _loading = true;
-      _loadingProvider = providerName;
-    });
+    setState(() => _loading = true);
     try {
-      final result = await signIn();
+      final result = await AuthService.signInWithGoogle();
       if (result == null) {
-        //User cancelled
+        // User cancelled the Google account
         if (mounted) setState(() => _loading = false);
         return;
       }
@@ -41,51 +37,119 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$providerName sign-in failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Google sign-in failed: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GradientScaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: SoftCard(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildLogo(),
-                const SizedBox(height: 20),
-                const Text(
-                  'Login',
-                  style: TextStyle(
-                    fontFamily: 'Lora',
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.charcoal,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                _ProviderButton(
-                  icon: Icons.g_mobiledata_rounded,
-                  iconColor: const Color(0xFFEA4335),
-                  label: 'Login With Google',
-                  loading: _loadingProvider == 'Google',
-                  disabled: _loading,
-                  onTap: () => _handleSocialSignIn(
-                    AuthService.signInWithGoogle,
-                    'Google',
-                  ),
-                ),
-                const SizedBox(height: 12),
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xfffce7f3),
+              Color(0xffffeaeb),
+              Color(0xffffeddf),
+              Color(0xfff9ecf2),
+              Color(0xfff3eaff),
+            ],
+          ),
+        ),
 
-                const SizedBox(height: 24),
-              ],
-            ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            children: [
+              const Spacer(flex: 3),
+              _buildLogo(),
+              const Spacer(flex: 2),
+              const Text(
+                'Discover the color that',
+                style: TextStyle(
+                  color: Color(0xff4c3935),
+                  fontFamily: 'Lora',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                'were made for you',
+                style: TextStyle(
+                  color: Color(0xffde939c),
+                  fontFamily: 'Lora',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Sign in to continue your personal\ncolor journey.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'Nunito',
+                  color: AppColors.charcoal,
+                  height: 1.4,
+                ),
+              ),
+              const Spacer(flex: 4),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _handleGoogleSignIn,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.white,
+                    foregroundColor: AppColors.charcoal,
+                    elevation: 2,
+                    shadowColor: AppColors.charcoal.withOpacity(0.15),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.g_mobiledata,
+                              size: 28,
+                              color: Color(0xFFEA4335),
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Continue with Google',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              const Spacer(flex: 2),
+              Text.rich(
+                TextSpan(
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.mid),
+                  children: [const TextSpan(text: "camera access needed")],
+                ),
+              ),
+              const Spacer(flex: 2),
+            ],
           ),
         ),
       ),
@@ -93,81 +157,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLogo() {
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.cream,
-        border: Border.all(color: AppColors.gold, width: 3),
-      ),
-      alignment: Alignment.center,
-      child: const Icon(Icons.lock_open, color: Colors.black, size: 32),
-    );
-  }
-}
-
-//Login With Google
-class _ProviderButton extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final VoidCallback onTap;
-  final bool loading;
-  final bool disabled;
-
-  const _ProviderButton({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.onTap,
-    this.loading = false,
-    this.disabled = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: disabled && !loading ? 0.5 : 1,
-      child: Material(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(30),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(30),
-          onTap: disabled ? null : onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, color: iconColor, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.charcoal,
-                    ),
-                  ),
-                ),
-                if (loading)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: AppColors.mid,
-                  ),
-              ],
-            ),
+    return Column(
+      children: [
+        Center(
+          child: Image.asset(
+            'assets/seasonme_logo.png',
+            width: 150,
+            height: 150,
           ),
         ),
-      ),
+        const SizedBox(height: 2),
+      ],
     );
   }
 }

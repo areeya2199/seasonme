@@ -22,62 +22,65 @@ class ResultScreen extends StatefulWidget {
 }
 
 class _ResultScreenState extends State<ResultScreen> {
-  late final SeasonProfile _profile;
-  late final List<SwatchItem> _dayTops;
-  late final List<SwatchItem> _dayBottoms;
+  static const int _topsGroupCount = 7;
+  static const int _topsGroupSize = 9;
 
   bool _nightMode = false;
   int? _selectedTopIndex;
+  int _topsGroupIndex = 0;
+
+  late SeasonProfile _profile;
+  late List<SwatchItem> _bottoms;
 
   @override
   void initState() {
     super.initState();
-    _profile = SeasonPaletteData.getProfile(widget.season);
-    final random = Random();
-    //สุ่มเลือก 9 สีจาก tops และ bottoms
-    _dayTops = SeasonPaletteData.pickRandom(_profile.tops, 9, random);
-    _dayBottoms = SeasonPaletteData.pickRandom(_profile.bottoms, 9, random);
-
+    _loadProfile();
     if (widget.recordToHistory) {
       AnalysisHistoryService.addEntry(widget.season);
     }
   }
 
-  //Day/night
-  List<SwatchItem> get _activeTops =>
-      _nightMode ? SeasonPaletteData.nightVariants(_dayTops) : _dayTops;
+  void _loadProfile() {
+    _profile = SeasonPaletteData.getProfile(widget.season, night: _nightMode);
+    _bottoms = SeasonPaletteData.pickRandom(_profile.bottoms, 9);
+    _topsGroupIndex = Random().nextInt(_topsGroupCount);
+    _selectedTopIndex = null;
+  }
 
-  List<SwatchItem> get _activeBottoms =>
-      _nightMode ? SeasonPaletteData.nightVariants(_dayBottoms) : _dayBottoms;
+  //สุ่มจากกลุ่มของ tops ที่มีอยู่ใน profile โดยใช้ _topsGroupIndex
+  List<SwatchItem> get _tops {
+    final start = _topsGroupIndex * _topsGroupSize;
+    return _profile.topsPool.sublist(start, start + _topsGroupSize);
+  }
 
-  List<SwatchItem> get _activeHair => _nightMode
-      ? SeasonPaletteData.nightVariants(_profile.hair)
-      : _profile.hair;
+  void _shuffleTops() {
+    setState(() {
+      int next;
+      do {
+        next = Random().nextInt(_topsGroupCount);
+      } while (next == _topsGroupIndex);
+      _topsGroupIndex = next;
+      _selectedTopIndex = null;
+    });
+  }
 
-  List<SwatchItem> get _activeEyeMakeup => _nightMode
-      ? SeasonPaletteData.nightVariants(_profile.eyeMakeup)
-      : _profile.eyeMakeup;
+  void _setNightMode(bool value) {
+    if (value == _nightMode) return;
+    setState(() {
+      _nightMode = value;
+      _loadProfile();
+    });
+  }
 
-  List<SwatchItem> get _activeBlush => _nightMode
-      ? SeasonPaletteData.nightVariants(_profile.blush)
-      : _profile.blush;
-
-  List<SwatchItem> get _activeLipstick => _nightMode
-      ? SeasonPaletteData.nightVariants(_profile.lipstick)
-      : _profile.lipstick;
-
-  List<SwatchItem> get _activeJewelry => _nightMode
-      ? SeasonPaletteData.nightVariants(_profile.jewelry)
-      : _profile.jewelry;
-
-  //Color pairing
+  //จับคู่สี
   void _onTopTap(int index) {
     setState(() {
       _selectedTopIndex = _selectedTopIndex == index ? null : index;
     });
   }
 
-  //อันนี้ไม่เอา รอแก้
+  //คำนวณระยะห่างของสีในอวกาศ Lab เพื่อหาสีที่ใกล้เคียงที่สุด
   double _colorDistance(Color a, Color b) {
     final labA = _rgbToLab(a);
     final labB = _rgbToLab(b);
@@ -124,27 +127,27 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   Widget build(BuildContext context) {
     final selectedColor = _selectedTopIndex != null
-        ? _activeTops[_selectedTopIndex!].color
+        ? _tops[_selectedTopIndex!].color
         : null;
 
     final matchedBottoms = selectedColor == null
         ? null
-        : _nearestIndex(selectedColor, _activeBottoms);
+        : _nearestIndex(selectedColor, _bottoms);
     final matchedHair = selectedColor == null
         ? null
-        : _nearestIndex(selectedColor, _activeHair);
+        : _nearestIndex(selectedColor, _profile.hair);
     final matchedEyeMakeup = selectedColor == null
         ? null
-        : _nearestIndex(selectedColor, _activeEyeMakeup);
+        : _nearestIndex(selectedColor, _profile.eyeMakeup);
     final matchedBlush = selectedColor == null
         ? null
-        : _nearestIndex(selectedColor, _activeBlush);
+        : _nearestIndex(selectedColor, _profile.blush);
     final matchedLipstick = selectedColor == null
         ? null
-        : _nearestIndex(selectedColor, _activeLipstick);
+        : _nearestIndex(selectedColor, _profile.lipstick);
     final matchedJewelry = selectedColor == null
         ? null
-        : _nearestIndex(selectedColor, _activeJewelry);
+        : _nearestIndex(selectedColor, _profile.jewelry);
 
     return GradientScaffold(
       body: SingleChildScrollView(
@@ -173,51 +176,51 @@ class _ResultScreenState extends State<ResultScreen> {
 
             _paletteSection(
               'Tops',
-              _activeTops,
-              sparkle: true,
+              _tops,
               big: true,
               selectable: true,
+              sparkle: true,
               selectedIndex: _selectedTopIndex,
               onTapItem: _onTopTap,
+              onShuffle: _shuffleTops,
             ),
             _paletteSection(
               'Bottoms',
-              _activeBottoms,
+              _bottoms,
               sparkle: true,
               matchedIndex: matchedBottoms,
             ),
             _paletteSection(
               'Recommended Hair Colors',
-              _activeHair,
+              _profile.hair,
               sparkle: true,
               matchedIndex: matchedHair,
             ),
             _paletteSection(
               'Eye Makeup',
-              _activeEyeMakeup,
+              _profile.eyeMakeup,
               sparkle: true,
               matchedIndex: matchedEyeMakeup,
             ),
             _paletteSection(
               'Blush Palette',
-              _activeBlush,
+              _profile.blush,
               sparkle: true,
               matchedIndex: matchedBlush,
             ),
             _paletteSection(
               'Lipstick Palette',
-              _activeLipstick,
+              _profile.lipstick,
               sparkle: true,
               matchedIndex: matchedLipstick,
             ),
             _paletteSection(
               'Jewelry',
-              _activeJewelry,
+              _profile.jewelry,
               sparkle: true,
               matchedIndex: matchedJewelry,
             ),
 
-            //check an outfit button
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -234,8 +237,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    //compare the uploaded outfit against.
-                    builder: (_) => const ClothingScreen(),
+                    builder: (_) => ClothingScreen(season: widget.season),
                   ),
                 ),
                 icon: const Icon(Icons.checkroom_outlined, size: 18),
@@ -278,7 +280,6 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  //Your Result card
   Widget _buildResultHeader() {
     return Container(
       width: double.infinity,
@@ -314,7 +315,13 @@ class _ResultScreenState extends State<ResultScreen> {
                   ),
                 ),
               ),
-              _circleIconButton(Icons.ios_share, small: true, onTap: () {}),
+              _circleIconButton(
+                Icons.ios_share,
+                small: true,
+                onTap: () {
+                  // TODO: implement share result.
+                },
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -322,7 +329,7 @@ class _ResultScreenState extends State<ResultScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
@@ -401,7 +408,6 @@ class _ResultScreenState extends State<ResultScreen> {
       icon: Container(
         padding: EdgeInsets.all(small ? 8 : 6),
         decoration: const BoxDecoration(
-          //พื้นหลังย้อนกลับ เซฟ
           color: AppColors.cream,
           shape: BoxShape.circle,
         ),
@@ -410,7 +416,6 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  //day/night toggle
   Widget _buildDayNightToggle() {
     Widget chip(String label, IconData icon, bool active, VoidCallback onTap) {
       return Expanded(
@@ -420,7 +425,7 @@ class _ResultScreenState extends State<ResultScreen> {
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: active ? AppColors.charcoal : AppColors.white, //พื้นหลัง
+              color: active ? Color(0xff4c3935) : AppColors.white,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -429,9 +434,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 Icon(
                   icon,
                   size: 15,
-                  color: active
-                      ? AppColors.gold
-                      : AppColors.charcoal, //icon color
+                  color: active ? Colors.white : AppColors.mid,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -451,13 +454,19 @@ class _ResultScreenState extends State<ResultScreen> {
 
     return Row(
       children: [
-        chip('Day', Icons.wb_sunny_outlined, !_nightMode, () {
-          if (_nightMode) setState(() => _nightMode = false);
-        }),
+        chip(
+          'Day',
+          Icons.wb_sunny_outlined,
+          !_nightMode,
+          () => _setNightMode(false),
+        ),
         const SizedBox(width: 10),
-        chip('Night', Icons.nightlight_round, _nightMode, () {
-          if (!_nightMode) setState(() => _nightMode = true);
-        }),
+        chip(
+          'Night Mode',
+          Icons.nightlight_round,
+          _nightMode,
+          () => _setNightMode(true),
+        ),
       ],
     );
   }
@@ -471,6 +480,7 @@ class _ResultScreenState extends State<ResultScreen> {
     int? selectedIndex,
     int? matchedIndex,
     void Function(int index)? onTapItem,
+    VoidCallback? onShuffle,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
@@ -479,11 +489,14 @@ class _ResultScreenState extends State<ResultScreen> {
         children: [
           Row(
             children: [
+              //icon sun moon
               if (sparkle) ...[
                 Icon(
-                  _nightMode ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+                  _nightMode ? Icons.nightlight_round : Icons.sunny,
                   size: 15,
-                  color: _nightMode ? Colors.amberAccent : Colors.orange,
+                  color: _nightMode
+                      ? const Color.fromARGB(255, 230, 220, 28)
+                      : const Color.fromARGB(255, 239, 173, 20),
                 ),
                 const SizedBox(width: 6),
               ],
@@ -495,6 +508,10 @@ class _ResultScreenState extends State<ResultScreen> {
                   color: AppColors.charcoal,
                 ),
               ),
+              if (onShuffle != null) ...[
+                const SizedBox(width: 8),
+                _ShuffleButton(onTap: onShuffle),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -544,7 +561,6 @@ class _SwatchTile extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         onSelect?.call();
-        //ไม่แสดง Hex code
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$_hex copied'),
@@ -615,6 +631,35 @@ class _SwatchTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+//ปุมShuffle tops
+class _ShuffleButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ShuffleButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.charcoal.withOpacity(0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.shuffle, size: 16, color: AppColors.charcoal),
       ),
     );
   }

@@ -71,8 +71,7 @@ class AnalysisHistoryService {
     await prefs.setStringList(_key, raw);
   }
 
-  /// Removes the entry at [index] in the (newest-first) list returned by
-  /// [getAll] — matches what HomeScreen's Delete mode operates on.
+  // Removes the entry at [index] from the history
   static Future<void> removeAt(int index) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_key) ?? [];

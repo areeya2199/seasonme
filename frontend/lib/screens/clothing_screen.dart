@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../data/season_palette.dart';
-import '../services/clothing_check.dart';
 
 //หน้านี้ยังไม่เสร็จสมบูรณ์
 class ClothingScreen extends StatefulWidget {
@@ -18,8 +17,6 @@ enum _LoadState { idle, loading, done, error }
 
 class _ClothingScreenState extends State<ClothingScreen> {
   File? _pickedImage;
-  DominantColorResult? _detected;
-  OutfitMatchVerdict? _verdict;
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
 
@@ -42,25 +39,13 @@ class _ClothingScreenState extends State<ClothingScreen> {
         _pickedImage = file;
         _state = _LoadState.loading;
         _errorMessage = null;
-        _verdict = null;
-        _detected = null;
-      });
-
-      final detected = await ClothingColorService.extractDominantColor(file);
-      final verdict = ClothingColorService.evaluate(widget.season, detected);
-
-      if (!mounted) return;
-      setState(() {
-        _detected = detected;
-        _verdict = verdict;
-        _state = _LoadState.done;
+        // _verdict = null;
+        // _detected = null;
       });
     } catch (e) {
-      if (!mounted) return;
       setState(() {
         _state = _LoadState.error;
-        _errorMessage =
-            'Could not analyze this photo. Please try a clearer, well-lit picture of the garment.';
+        _errorMessage = 'Unable to select photo.';
       });
     }
   }
@@ -224,13 +209,6 @@ class _ClothingScreenState extends State<ClothingScreen> {
               ),
               const SizedBox(height: 24),
 
-              if (_state == _LoadState.loading) _buildLoading(),
-              if (_state == _LoadState.error) _buildError(),
-              if (_state == _LoadState.done &&
-                  _detected != null &&
-                  _verdict != null)
-                _buildResultCard(_detected!, _verdict!),
-
               const SizedBox(height: 12),
               const Text(
                 'Or tap a swatch from your clothing palette',
@@ -241,7 +219,6 @@ class _ClothingScreenState extends State<ClothingScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildPaletteQuickTest(),
 
               const SizedBox(height: 24),
             ],
@@ -295,176 +272,6 @@ class _ClothingScreenState extends State<ClothingScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildResultCard(
-    DominantColorResult detected,
-    OutfitMatchVerdict verdict,
-  ) {
-    final statusColor = verdict.isGoodMatch ? AppColors.sage : Colors.redAccent;
-    return SoftCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: detected.color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.charcoal.withOpacity(0.08),
-                    width: 1.5,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Detected garment color',
-                      style: TextStyle(fontSize: 11, color: AppColors.mid),
-                    ),
-                    Text(
-                      '#${detected.color.value.toRadixString(16).substring(2).toUpperCase()}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  verdict.isGoodMatch ? Icons.check_circle : Icons.cancel,
-                  size: 14,
-                  color: statusColor,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  verdict.label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '· ${(verdict.score * 100).round()}% fit',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: statusColor.withOpacity(0.8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            verdict.reason,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.mid,
-              height: 1.5,
-            ),
-          ),
-          if (verdict.closestPaletteColor != null) ...[
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    color: verdict.closestPaletteColor!.color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Closest in your palette: ${verdict.closestPaletteColor!.name}',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.charcoal,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaletteQuickTest() {
-    return SizedBox(
-      height: 64,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _profile.tops.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, i) {
-          final swatch = _profile.tops[i];
-          return GestureDetector(
-            onTap: () {
-              final hsl = HSLColor.fromColor(swatch.color);
-              final detected = DominantColorResult(
-                swatch.color,
-                hsl.hue,
-                hsl.saturation,
-                hsl.lightness,
-              );
-              final verdict = ClothingColorService.evaluate(
-                widget.season,
-                detected,
-              );
-              setState(() {
-                _pickedImage = null;
-                _detected = detected;
-                _verdict = verdict;
-                _state = _LoadState.done;
-              });
-            },
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: swatch.color,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.charcoal.withOpacity(0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }

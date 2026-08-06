@@ -21,9 +21,7 @@ class ProcessingScreen extends StatefulWidget {
     // required this.season,
     required this.answers,
   });
-   
 
-  
   @override
   State<ProcessingScreen> createState() => _ProcessingScreenState();
 }
@@ -36,39 +34,34 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     'Curating your palette',
   ];
   Future<Map<String, dynamic>?> _uploadImage() async {
-  try {
-    var request = http.MultipartRequest(
-      "POST",
-      Uri.parse("http://10.0.2.2:8000/analyze"),
-    );
+    try {
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("http://10.0.2.2:8000/analyze"),
+      );
 
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        "file",
-        widget.imagePath!,
-      ),
-    );
+      request.files.add(
+        await http.MultipartFile.fromPath("file", widget.imagePath!),
+      );
 
-    request.fields["answers"] = jsonEncode(
-      widget.answers.map(
-        (key, value) => MapEntry(key.toString(), value),
-  ),
-);
+      request.fields["answers"] = jsonEncode(
+        widget.answers.map((key, value) => MapEntry(key.toString(), value)),
+      );
 
-    var response = await request.send();
+      var response = await request.send();
 
-    if (response.statusCode == 200) {
-      final body = await response.stream.bytesToString();
-      print(body);
+      if (response.statusCode == 200) {
+        final body = await response.stream.bytesToString();
+        print(body);
 
-      return jsonDecode(body);
+        return jsonDecode(body);
+      }
+    } catch (e) {
+      print(e);
     }
-  } catch (e) {
-    print(e);
-  }
 
-  return null;
-}
+    return null;
+  }
 
   int _currentStep = 0;
   Timer? _timer;
@@ -80,21 +73,20 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       if (_currentStep >= _steps.length - 1) {
         timer.cancel();
         Future.delayed(const Duration(milliseconds: 700), () async {
-  if (!mounted) return;
+          if (!mounted) return;
 
-  final result = await _uploadImage();
+          final result = await _uploadImage();
 
-  if (result == null) return;
+          if (result == null) return;
 
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ResultScreen(
-        season: _convertSeason(result["season"]),
-      ),
-    ),
-  );
-});
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ResultScreen(season: _convertSeason(result["season"])),
+            ),
+          );
+        });
         return;
       }
       setState(() => _currentStep++);
@@ -108,31 +100,25 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     _timer?.cancel();
     super.dispose();
   }
+
   SeasonKey _convertSeason(String season) {
-  switch (season.toLowerCase()) {
-    case "spring":
-      return SeasonKey.Spring;
+    switch (season.toLowerCase()) {
+      case "spring":
+        return SeasonKey.Spring;
 
-    case "summer":
-      return SeasonKey.Summer;
+      case "summer":
+        return SeasonKey.Summer;
 
-    case "autumn":
-      return SeasonKey.Autumn;
+      case "autumn":
+        return SeasonKey.Autumn;
 
-    case "winter":
-      return SeasonKey.Winter;
+      case "winter":
+        return SeasonKey.Winter;
 
-    default:
-      return SeasonKey.Summer;
+      default:
+        return SeasonKey.Summer;
+    }
   }
-}
-
-  /// TODO: replace with the real result from the color-analysis backend
-  /// (upload widget.imagePath + questionnaire answers, get a SeasonKey
-  /// back). Picking randomly here only stands in until that API exists.
-  // SeasonKey _mockAnalysisResult() {
-  //   return SeasonKey.values[Random().nextInt(SeasonKey.values.length)];
-  // }
 
   @override
   Widget build(BuildContext context) {
