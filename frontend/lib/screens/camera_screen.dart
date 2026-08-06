@@ -1,6 +1,5 @@
 import 'dart:io';
 
-
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show WriteBuffer;
 import 'package:flutter/material.dart';
@@ -10,8 +9,6 @@ import '../config/preview.dart';
 import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
 import 'processing_screen.dart';
-
-
 
 enum _Guidance {
   initializing,
@@ -127,9 +124,7 @@ class _CameraScreenState extends State<CameraScreen>
       final next = _torchOn ? FlashMode.off : FlashMode.torch;
       await controller.setFlashMode(next);
       if (mounted) setState(() => _torchOn = !_torchOn);
-    } catch (_) {
-      // Some devices don't support torch mode — ignore the error.
-    }
+    } catch (_) {}
   }
 
   @override
@@ -270,19 +265,7 @@ class _CameraScreenState extends State<CameraScreen>
 
     // print(face.boundingBox);
     return _Guidance.ready;
-
   }
-
-  // -- Capture ----------------------------------------------------------
-
-  // Future<void> _capture() async {
-  //   final controller = _controller;
-    
-  //   if (controller == null || _guidance != _Guidance.ready || _capturing) {
-  //     return;
-  //   }
-  //   return _Guidance.ready;
-  // }
 
   //Capture
   Future<void> _capture() async {
@@ -292,10 +275,7 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const ProcessingScreen(
-            imagePath: null,
-            answers: {},
-          ),
+          builder: (_) => const ProcessingScreen(imagePath: null, answers: {}),
         ),
       );
     }
@@ -310,11 +290,9 @@ class _CameraScreenState extends State<CameraScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => QuestionnaireScreen(
-          imagePath: file.path,
-    ),
-  ),
-);
+          builder: (_) => QuestionnaireScreen(imagePath: file.path),
+        ),
+      );
     } catch (_) {
       if (mounted) setState(() => _capturing = false);
       final c = _controller;
@@ -324,8 +302,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  // -- UI -----------------------------------------------------------------
-
+  //UI
   String get _statusMessage {
     switch (_guidance) {
       case _Guidance.initializing:
@@ -351,7 +328,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-String get _pillMessage => _statusMessage;
+  String get _pillMessage => _statusMessage;
   IconData get _pillIcon {
     switch (_guidance) {
       case _Guidance.ready:
@@ -429,7 +406,7 @@ String get _pillMessage => _statusMessage;
           ),
         ],
       ),
-    );  
+    );
   }
 
   Widget _buildTopBar(BuildContext context) {

@@ -20,16 +20,10 @@ class _QuizOption {
   _QuizOption({required this.label, required this.hint});
 }
 
-
 class QuestionnaireScreen extends StatefulWidget {
   final String imagePath;
- 
 
-  const QuestionnaireScreen({
-    super.key,
-    required this.imagePath,
-    
-  });
+  const QuestionnaireScreen({super.key, required this.imagePath});
 
   @override
   State<QuestionnaireScreen> createState() => _QuestionnaireScreenState();
@@ -81,25 +75,23 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   ];
 
   void _next() {
-  _answers[_step] = _selected!;
+    _answers[_step] = _selected!;
 
-  if (_step < _questions.length - 1) {
-    setState(() {
-      _step++;
-      _selected = _answers[_step];
-    });
-  } else {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProcessingScreen(
-          imagePath: widget.imagePath,
-          answers: _answers,
+    if (_step < _questions.length - 1) {
+      setState(() {
+        _step++;
+        _selected = _answers[_step];
+      });
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ProcessingScreen(imagePath: widget.imagePath, answers: _answers),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -252,18 +244,20 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   onPressed: _selected != null ? _next : null,
                   child: Text(
                     _step == _questions.length - 1 ? 'Finish' : 'Continue',
-                    style: TextStyle(color: AppColors.cream),
+                    style: TextStyle(color: AppColors.white),
                   ),
                 ),
               ),
               TextButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ProcessingScreen(
-                    imagePath: widget.imagePath,
-                    // season: widget.season,
-                    answers: _answers,
-                  )),
+                  MaterialPageRoute(
+                    builder: (_) => ProcessingScreen(
+                      imagePath: widget.imagePath,
+                      // season: widget.season,
+                      answers: _answers,
+                    ),
+                  ),
                 ),
                 child: const Text(
                   'Skip',
