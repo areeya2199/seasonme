@@ -1,8 +1,10 @@
 //Splash
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/login.dart';
 import '../theme/app_theme.dart';
 import '../services/preferences.dart';
 import 'home_screen.dart';
+import 'login.dart';
 
 //splash screen
 class SplashScreen extends StatefulWidget {
@@ -31,7 +33,7 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => isLoggedIn ? const HomeScreen() : const HomeScreen(),
+        builder: (_) => isLoggedIn ? const HomeScreen() : const LoginScreen(),
       ),
     );
   }
