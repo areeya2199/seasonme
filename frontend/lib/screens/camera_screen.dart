@@ -226,7 +226,7 @@ class _CameraScreenState extends State<CameraScreen>
       );
     }
 
-    // iOS planes come as separate buffers oncatenate into one.
+    // iOS and other platforms
     final buffer = WriteBuffer();
     for (final plane in image.planes) {
       buffer.putUint8List(plane.bytes);

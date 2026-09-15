@@ -272,6 +272,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   horizontal: 16,
                   vertical: 14,
                 ),
+                // Row for the history item
                 child: Row(
                   children: [
                     Container(
@@ -283,6 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
+                    // Column for season label and date
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,6 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: AppColors.charcoal,
                             ),
                           ),
+                          // Date
                           Text(
                             _formatAnalyzedDate(item.analyzedAt),
                             style: const TextStyle(
@@ -329,8 +332,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   static const List<String> _monthAbbr = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', //
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _formatAnalyzedDate(DateTime dt) {
