@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/login.dart';
 import 'package:frontend/screens/splash_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
@@ -317,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: () {
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (_) => const SplashScreen()),
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
                     (route) => false,
                   );
                 },
