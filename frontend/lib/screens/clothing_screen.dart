@@ -7,6 +7,12 @@ import '../theme/app_theme.dart';
 import '../data/season_palette.dart';
 import '../utils/color_utils.dart';
 
+// Outfit Checker: the user photographs (or uploads) a piece of clothing,
+// the app samples its color, and checks how close that color is to the
+// SAME season the user got on the Result screen — Winter photos compare
+// only to the Winter palette, Autumn to Autumn, and so on for all 4
+// seasons, since `_profile` below is always built from `widget.season`.
+// No manual color picking: the photo is the only input.
 class ClothingScreen extends StatefulWidget {
   final SeasonKey season;
   const ClothingScreen({super.key, this.season = SeasonKey.Autumn});
@@ -40,13 +46,6 @@ class _ClothingScreenState extends State<ClothingScreen> {
   late final SeasonProfile _profile = SeasonPaletteData.getProfile(
     widget.season,
   );
-
-  // Quick-tap alternative to taking a photo — colors already known to
-  // belong to this season, for a fast manual check.
-  late final List<SwatchItem> _quickSwatches = [
-    ..._profile.topsPool.take(8),
-    ..._profile.bottoms,
-  ];
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -82,16 +81,6 @@ class _ClothingScreenState extends State<ClothingScreen> {
         _errorMessage = 'อ่านสีจากภาพไม่สำเร็จ ลองใหม่อีกครั้ง';
       });
     }
-  }
-
-  void _pickQuickSwatch(SwatchItem item) {
-    setState(() {
-      _pickedImage = null;
-      _sampledColor = item.color;
-      _result = _matchAgainstSeason(item.color);
-      _state = _LoadState.done;
-      _errorMessage = null;
-    });
   }
 
   // ---- "Take a photo and detect the color": average the center of the
@@ -323,57 +312,20 @@ class _ClothingScreenState extends State<ClothingScreen> {
               if (_state == _LoadState.error) _buildError(),
               if (_state == _LoadState.done && _result != null)
                 _buildResultCard(),
-
-              const SizedBox(height: 24),
-              const Text(
-                'Or tap a swatch from your clothing palette',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.charcoal,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 64,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _quickSwatches.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (context, i) {
-                    final item = _quickSwatches[i];
-                    final active = _sampledColor == item.color;
-                    return GestureDetector(
-                      onTap: () => _pickQuickSwatch(item),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: item.color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: active ? AppColors.charcoal : Colors.white,
-                            width: 2.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.charcoal.withOpacity(0.08),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+              if (_state == _LoadState.idle) _buildIdleHint(),
 
               const SizedBox(height: 24),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIdleHint() {
+    return Text(
+      'ถ่ายหรืออัปโหลดรูปเสื้อผ้า แล้วแอปจะตรวจสีให้อัตโนมัติว่าเข้ากับซีซั่น ${_profile.displayName} ของคุณแค่ไหน',
+      style: const TextStyle(fontSize: 12, color: AppColors.mid),
     );
   }
 
@@ -539,7 +491,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
         return _LevelInfo(
           'ควรเลี่ยง',
           const Color(0xFFC65B5B),
-          'สีนี้ค่อนข้างห่างจากโทนของ ${_profile.displayName} ลองเทียบกับพาเลตด้านล่างแทน',
+          'สีนี้ค่อนข้างห่างจากโทนของ ${_profile.displayName} ลองถ่ายชิ้นอื่นเทียบดูอีกครั้ง',
         );
     }
   }
