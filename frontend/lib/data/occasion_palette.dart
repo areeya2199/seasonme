@@ -12,26 +12,26 @@ extension OccasionLabel on Occasion {
   String get label {
     switch (this) {
       case Occasion.work:
-        return 'ที่ทำงาน';
+        return 'Work / Office';
       case Occasion.temple:
-        return 'วัด / งานทำบุญ';
+        return 'Temple / Religious';
       case Occasion.nature:
-        return 'ท่องเที่ยวธรรมชาติ';
+        return 'Nature / Travel';
       case Occasion.celebration:
-        return 'งานเฉลิมฉลอง';
+        return 'Celebration / Party';
     }
   }
 
   String get subtitle {
     switch (this) {
       case Occasion.work:
-        return 'สุภาพ น่าเชื่อถือ';
+        return 'Professional and trustworthy';
       case Occasion.temple:
-        return 'นุ่มนวล เรียบร้อย';
+        return 'Gentle and elegant';
       case Occasion.nature:
-        return 'สดใสตัดกับบรรยากาศธรรมชาติ';
+        return 'Vibrant and nature-friendly';
       case Occasion.celebration:
-        return 'สดใส สบายตา';
+        return 'Vibrant and festive';
     }
   }
 
