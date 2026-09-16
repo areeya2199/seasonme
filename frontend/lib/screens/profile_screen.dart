@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/screens/login.dart';
 import 'package:frontend/screens/splash_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
@@ -42,20 +41,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('แก้ไขชื่อที่แสดง'),
+        title: const Text('Edit User Name'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'ชื่อของคุณ'),
+          decoration: const InputDecoration(hintText: 'Your Name'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('ยกเลิก'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('บันทึก'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -93,7 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
               Text(
-                'ช่วยเหลือ & คำถามที่พบบ่อย',
+                'Help & Support',
                 style: TextStyle(
                   fontFamily: 'Lora',
                   fontSize: 17,
@@ -103,22 +102,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               SizedBox(height: 12),
               Text(
-                '• วิเคราะห์สีผิวได้จากเมนู "Begin Analysis" ที่หน้าแรก',
+                '• Analyze your skin tone from the "Begin Analysis" menu on the main screen',
                 style: TextStyle(fontSize: 13, color: AppColors.mid),
               ),
               SizedBox(height: 6),
               Text(
-                '• สลับโหมด Day / Night ที่หน้าผลลัพธ์เพื่อดูโทนสีอีกชุด',
+                '• Switch between Day / Night modes on the results screen to see different color palettes',
                 style: TextStyle(fontSize: 13, color: AppColors.mid),
               ),
               SizedBox(height: 6),
               Text(
-                '• แตะไอคอนมุมขวาบนของหน้าผลลัพธ์เพื่อเลือกโทนสีตามสถานที่',
+                '• Tap the icon in the top right corner of the results screen to select colors based on location',
                 style: TextStyle(fontSize: 13, color: AppColors.mid),
               ),
               SizedBox(height: 6),
               Text(
-                '• ใช้ "Check an Outfit" เพื่อตรวจว่าสีเสื้อผ้าที่ถ่ายเข้ากับซีซั่นของคุณแค่ไหน',
+                '• Use "Check an Outfit" to see how well your clothing choices match your season',
                 style: TextStyle(fontSize: 13, color: AppColors.mid),
               ),
             ],
@@ -131,11 +130,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openAbout() {
     showAboutDialog(
       context: context,
-      applicationName: 'Personal Color',
+      applicationName: 'SeasonMe',
       applicationVersion: '1.0.0',
-      children: const [
-        Text('แอปวิเคราะห์โทนสีส่วนบุคคลและแนะนำการแต่งกายตามซีซั่นสี'),
-      ],
+      children: const [Text('Personal Color Analysis Application')],
     );
   }
 
@@ -265,26 +262,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
             _ProfileTile(
               icon: Icons.access_time,
-              label: 'ประวัติการวิเคราะห์ทั้งหมด',
+              label: 'Full Analysis History',
               onTap: _openFullHistory,
             ),
-            _ProfileTile(
-              icon: Icons.notifications_none,
-              label: 'การแจ้งเตือน',
-              trailing: Switch(
-                value: _notificationsEnabled,
-                activeColor: AppColors.gold,
-                onChanged: (v) => setState(() => _notificationsEnabled = v),
-              ),
-              onTap: () => setState(
-                () => _notificationsEnabled = !_notificationsEnabled,
-              ),
-            ),
-            _ProfileTile(
-              icon: Icons.language,
-              label: _isThaiLanguage ? 'ภาษา: ไทย' : 'Language: English',
-              onTap: () => setState(() => _isThaiLanguage = !_isThaiLanguage),
-            ),
+
             _ProfileTile(
               icon: Icons.help_outline,
               label: 'Help & Support',
@@ -292,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _ProfileTile(
               icon: Icons.info_outline,
-              label: 'เกี่ยวกับแอป',
+              label: 'About the App',
               onTap: _openAbout,
             ),
 
@@ -318,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: () {
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    MaterialPageRoute(builder: (_) => const SplashScreen()),
                     (route) => false,
                   );
                 },
@@ -351,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'ยังไม่มีผลวิเคราะห์สี ลองเริ่มที่หน้าแรก',
+                'No color analysis available yet. Try starting on the main screen.',
                 style: TextStyle(fontSize: 13, color: AppColors.mid),
               ),
             ),
@@ -385,7 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'ซีซั่นสีของคุณ',
+                  'Your latest Analysis Result',
                   style: TextStyle(fontSize: 11, color: AppColors.mid),
                 ),
                 Text(
@@ -455,7 +436,7 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
                   GradientBackButton(onPressed: () => Navigator.pop(context)),
                   const SizedBox(width: 12),
                   const Text(
-                    'ประวัติการวิเคราะห์',
+                    'Analysis History',
                     style: TextStyle(
                       fontFamily: 'Lora',
                       fontSize: 18,
@@ -470,7 +451,7 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
                 child: _items.isEmpty
                     ? const Center(
                         child: Text(
-                          'ยังไม่มีประวัติ',
+                          'No analysis history available yet.',
                           style: TextStyle(color: AppColors.mid),
                         ),
                       )
