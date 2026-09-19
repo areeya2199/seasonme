@@ -7,6 +7,7 @@ import 'select_screen.dart';
 import 'result_screen.dart';
 import 'profile_screen.dart';
 import 'photoguide.dart';
+import '../services/auth_service.dart';
 
 //Home
 class HomeScreen extends StatefulWidget {
@@ -69,8 +70,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
   //find the color
   Widget _buildHeader(BuildContext context) {
+    final user = AuthService.currentUser;
+    final photoUrl = user?.photoURL;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,7 +109,12 @@ class _HomeScreenState extends State<HomeScreen> {
           child: CircleAvatar(
             radius: 22,
             backgroundColor: const Color(0xffecd5f1),
-            child: const Icon(Icons.person, color: Color(0xff543f59)),
+            backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                ? NetworkImage(photoUrl)
+                : null,
+            child: photoUrl == null || photoUrl.isEmpty
+                ? const Icon(Icons.person, color: Color(0xff543f59))
+                : null,
           ),
         ),
       ],

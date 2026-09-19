@@ -3,6 +3,7 @@ import 'package:frontend/screens/splash_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/analysis_history.dart';
+import '../services/preferences.dart';
 import '../data/season_palette.dart';
 import 'result_screen.dart';
 
@@ -403,8 +404,9 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
   late List<AnalysisHistoryEntry> _items = List.of(widget.history);
 
   Future<void> _remove(int index) async {
+    final item = _items[index];
     setState(() => _items.removeAt(index));
-    await AnalysisHistoryService.removeAt(index);
+    await AnalysisHistoryService.remove(item.id);
     widget.onChanged();
   }
 
