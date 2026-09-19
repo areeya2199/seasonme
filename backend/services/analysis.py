@@ -343,6 +343,10 @@ def analyze_skin(image, answers):
 
         "warm_score": round(warm_total, 2),
         "cool_score": round(cool_total, 2),
+        # Explicit aliases make it clear that these are the final combined
+        # scores, rather than the questionnaire-only values below.
+        "warm_total": round(warm_total, 2),
+        "cool_total": round(cool_total, 2),
 
         "questionnaire": {
         "warm": round(warm_question, 2),

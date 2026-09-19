@@ -41,8 +41,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _removeHistoryItem(int index) async {
+    final item = _history[index];
     setState(() => _history.removeAt(index));
-    await AnalysisHistoryService.removeAt(index);
+    await AnalysisHistoryService.remove(item.id);
     if (_history.isEmpty && mounted) {
       setState(() => _deleteMode = false);
     }
@@ -158,10 +159,11 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               await showFacePhotoGuide(context);
               if (!context.mounted) return;
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SelectScreen()),
               );
+              if (mounted) _loadHistory();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 233, 172, 187),

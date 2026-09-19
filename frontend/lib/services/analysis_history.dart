@@ -1,82 +1,96 @@
-import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/season_palette.dart';
 
 class AnalysisHistoryEntry {
+  final String id;
   final SeasonKey season;
   final DateTime analyzedAt;
+  final Map<String, dynamic> analysis;
 
-  const AnalysisHistoryEntry({required this.season, required this.analyzedAt});
+  const AnalysisHistoryEntry({
+    required this.id,
+    required this.season,
+    required this.analyzedAt,
+    required this.analysis,
+  });
 
-  Map<String, dynamic> toJson() => {
-    'season': season.name,
-    'analyzedAt': analyzedAt.toIso8601String(),
-  };
-
-  static AnalysisHistoryEntry fromJson(Map<String, dynamic> json) {
+  static AnalysisHistoryEntry fromFirestore(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final json = document.data();
+    final timestamp = json['analyzedAt'];
     return AnalysisHistoryEntry(
+      id: document.id,
       season: SeasonKey.values.firstWhere(
         (s) => s.name == json['season'],
         orElse: () => SeasonKey.Autumn,
       ),
-      analyzedAt:
-          DateTime.tryParse(json['analyzedAt'] as String? ?? '') ??
-          DateTime.now(),
+      analyzedAt: timestamp is Timestamp ? timestamp.toDate() : DateTime.now(),
+      analysis: json,
     );
   }
 }
 
 class AnalysisHistoryService {
-  static const _key = 'analysis_history';
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  static Future<List<AnalysisHistoryEntry>> getAll({
-    bool seedDemoIfNeverUsed = true,
+  static User? get _user => FirebaseAuth.instance.currentUser;
+
+  static CollectionReference<Map<String, dynamic>>? get _collection {
+    final user = _user;
+    if (user == null) return null;
+    return _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('analysisHistory');
+  }
+
+  static Future<List<AnalysisHistoryEntry>> getAll() async {
+    final collection = _collection;
+    if (collection == null) return [];
+
+    final snapshot = await collection
+        .orderBy('analyzedAt', descending: true)
+        .get();
+    return snapshot.docs.map(AnalysisHistoryEntry.fromFirestore).toList();
+  }
+
+  static Future<void> addEntry({
+    required SeasonKey season,
+    required Map<String, dynamic> analysis,
+    required Map<String, String> questionnaireAnswers,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    var raw = prefs.getStringList(_key);
+    final collection = _collection;
+    if (collection == null) return;
 
-    if (raw == null && seedDemoIfNeverUsed) {
-      final now = DateTime.now();
-      final demo = SeasonKey.values.asMap().entries.map((e) {
-        return AnalysisHistoryEntry(
-          season: e.value,
-          // Stagger fake dates so they read naturally, newest first.
-          analyzedAt: now.subtract(Duration(days: e.key * 6)),
-        );
-      }).toList();
-      raw = demo.map((e) => jsonEncode(e.toJson())).toList();
-      await prefs.setStringList(_key, raw);
-    }
-
-    raw ??= [];
-    return raw
-        .map(
-          (s) => AnalysisHistoryEntry.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
-  }
-
-  static Future<void> addEntry(SeasonKey season) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_key) ?? [];
-    final entry = AnalysisHistoryEntry(
-      season: season,
-      analyzedAt: DateTime.now(),
+    final questionnaire = Map<String, dynamic>.from(
+      analysis['questionnaire'] as Map? ?? const {},
     );
-    raw.insert(0, jsonEncode(entry.toJson()));
-    await prefs.setStringList(_key, raw);
+    await collection.add({
+      'season': season.name,
+      'undertone': analysis['undertone'],
+      'questionnaireAnswers': questionnaireAnswers,
+      'warm_score': analysis['warm_score'],
+      'cool_score': analysis['cool_score'],
+      'warm_question': questionnaire['warm'],
+      'cool_question': questionnaire['cool'],
+      'warm_total': analysis['warm_total'] ?? analysis['warm_score'],
+      'cool_total': analysis['cool_total'] ?? analysis['cool_score'],
+      'hue_angle': analysis['hue_angle'],
+      'rgb': analysis['rgb'],
+      'hsv': analysis['hsv'],
+      'lab': analysis['lab'],
+      'lightness_group': analysis['lightness_group'],
+      'chroma_group': analysis['chroma_group'],
+      'analyzedAt': Timestamp.fromDate(DateTime.now()),
+    });
   }
 
-  // Removes the entry at [index] from the history
-  static Future<void> removeAt(int index) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_key) ?? [];
-    if (index < 0 || index >= raw.length) return;
-    raw.removeAt(index);
-    await prefs.setStringList(_key, raw);
+  static Future<void> remove(String historyId) async {
+    final collection = _collection;
+    if (collection == null) return;
+    await collection.doc(historyId).delete();
   }
 }

@@ -82,8 +82,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ResultScreen(season: _convertSeason(result["season"])),
+                builder: (_) =>
+                  ResultScreen(
+                    season: _convertSeason(result["season"] as String),
+                    analysis: result,
+                    questionnaireAnswers: widget.answers.map(
+                      (key, value) => MapEntry(key.toString(), value),
+                    ),
+                  ),
             ),
           );
         });

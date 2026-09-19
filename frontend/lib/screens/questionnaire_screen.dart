@@ -248,22 +248,22 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProcessingScreen(
-                      imagePath: widget.imagePath,
-                      // season: widget.season,
-                      answers: _answers,
-                    ),
-                  ),
-                ),
-                child: const Text(
-                  'Skip',
-                  style: TextStyle(color: AppColors.mid),
-                ),
-              ),
+              // TextButton(
+              //   onPressed: () => Navigator.push(
+              //     context,
+              //     MaterialPageRoute(
+              //       builder: (_) => ProcessingScreen(
+              //         imagePath: widget.imagePath,
+              //         // season: widget.season,
+              //         answers: _answers,
+              //       ),
+              //     ),
+              //   ),
+              //   child: const Text(
+              //     'Skip',
+              //     style: TextStyle(color: AppColors.mid),
+              //   ),
+              // ),
               const SizedBox(height: 12),
             ],
           ),

@@ -10,11 +10,15 @@ import 'select_screen.dart';
 class ResultScreen extends StatefulWidget {
   final SeasonKey season;
   final bool recordToHistory;
+  final Map<String, dynamic>? analysis;
+  final Map<String, String>? questionnaireAnswers;
 
   const ResultScreen({
     super.key,
     required this.season,
     this.recordToHistory = true,
+    this.analysis,
+    this.questionnaireAnswers,
   });
 
   @override
@@ -36,8 +40,12 @@ class _ResultScreenState extends State<ResultScreen> {
   void initState() {
     super.initState();
     _loadProfile();
-    if (widget.recordToHistory) {
-      AnalysisHistoryService.addEntry(widget.season);
+    if (widget.recordToHistory && widget.analysis != null) {
+      AnalysisHistoryService.addEntry(
+        season: widget.season,
+        analysis: widget.analysis!,
+        questionnaireAnswers: widget.questionnaireAnswers ?? const {},
+      );
     }
   }
 
