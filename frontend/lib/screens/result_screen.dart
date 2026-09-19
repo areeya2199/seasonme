@@ -1,7 +1,10 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../data/season_palette.dart';
+import '../data/occasion_palette.dart';
+import '../utils/color_utils.dart';
 import '../services/analysis_history.dart';
 import '../theme/app_theme.dart';
 import 'clothing_screen.dart';
@@ -28,13 +31,54 @@ class ResultScreen extends StatefulWidget {
 class _ResultScreenState extends State<ResultScreen> {
   static const int _topsGroupCount = 7;
   static const int _topsGroupSize = 9;
+  static const int _occasionItemCount = 5;
+
+  // Order the sections appear on screen — also the order the floating
+  // "trail" bars stack in as the user scrolls past each one.
+  static const List<String> _sectionOrder = [
+    'tops',
+    'bottoms',
+    'hair',
+    'eye',
+    'blush',
+    'lipstick',
+    'jewelry',
+  ];
+  // How many of the most-recently-passed sections stay docked as
+  // floating bars — keeps the trail from eventually covering the screen.
+  static const int _maxTrailBars = 4;
 
   bool _nightMode = false;
+  Occasion? _occasion;
   int? _selectedTopIndex;
   int _topsGroupIndex = 0;
 
   late SeasonProfile _profile;
+
+  late List<SwatchItem> _tops;
   late List<SwatchItem> _bottoms;
+  late List<SwatchItem> _hair;
+  late List<SwatchItem> _eyeMakeup;
+  late List<SwatchItem> _blush;
+  late List<SwatchItem> _lipstick;
+  late List<SwatchItem> _jewelry;
+
+  // Harmony-matched indices, computed once per tap (not on every build)
+  // so the "controlled randomness" doesn't reshuffle every frame.
+  int? _matchedBottoms;
+  int? _matchedHair;
+  int? _matchedEye;
+  int? _matchedBlush;
+  int? _matchedLipstick;
+  int? _matchedJewelry;
+
+  // ---- scroll-following mini palette trail ----
+  final GlobalKey _stackKey = GlobalKey();
+  final ScrollController _scrollController = ScrollController();
+  final Map<String, GlobalKey> _sectionKeys = {
+    for (final id in _sectionOrder) id: GlobalKey(),
+  };
+  List<String> _passedSections = [];
 
   @override
   void initState() {
@@ -47,30 +91,137 @@ class _ResultScreenState extends State<ResultScreen> {
         questionnaireAnswers: widget.questionnaireAnswers ?? const {},
       );
     }
+    _scrollController.addListener(_recomputePassedSections);
+    _scheduleRecompute();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_recomputePassedSections);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleRecompute() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _recomputePassedSections();
+    });
+  }
+
+  void _recomputePassedSections() {
+    final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (stackBox == null || !stackBox.attached) return;
+
+    final passed = <String>[];
+    for (final id in _sectionOrder) {
+      final ctx = _sectionKeys[id]?.currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) continue;
+      final topLeft = box.localToGlobal(Offset.zero, ancestor: stackBox);
+      final bottom = topLeft.dy + box.size.height;
+      if (bottom < 4) {
+        passed.add(id);
+      }
+    }
+    if (!_listEquals(passed, _passedSections)) {
+      setState(() => _passedSections = passed);
+    }
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _loadProfile() {
     _profile = SeasonPaletteData.getProfile(widget.season, night: _nightMode);
-    _bottoms = SeasonPaletteData.pickRandom(_profile.bottoms, 9);
-    _topsGroupIndex = Random().nextInt(_topsGroupCount);
     _selectedTopIndex = null;
+    _passedSections = [];
+    _clearMatches();
+
+    if (_occasion == null) {
+      _bottoms = SeasonPaletteData.pickRandom(_profile.bottoms, 9);
+      _hair = _profile.hair;
+      _eyeMakeup = _profile.eyeMakeup;
+      _blush = _profile.blush;
+      _lipstick = _profile.lipstick;
+      _jewelry = _profile.jewelry;
+      _topsGroupIndex = Random().nextInt(_topsGroupCount);
+      _tops = _topsFromGroup();
+    } else {
+      _refreshOccasionPools();
+    }
+    _scheduleRecompute();
   }
 
-  //สุ่มจากกลุ่มของ tops ที่มีอยู่ใน profile โดยใช้ _topsGroupIndex
-  List<SwatchItem> get _tops {
+  List<SwatchItem> _topsFromGroup() {
     final start = _topsGroupIndex * _topsGroupSize;
     return _profile.topsPool.sublist(start, start + _topsGroupSize);
   }
 
+  void _refreshOccasionPools() {
+    final occ = _occasion!;
+    _tops = OccasionPaletteSelector.select(
+      occ,
+      _profile.topsPool,
+      _occasionItemCount,
+    );
+    _bottoms = OccasionPaletteSelector.select(
+      occ,
+      _profile.bottoms,
+      _occasionItemCount,
+    );
+    _hair = OccasionPaletteSelector.select(
+      occ,
+      _profile.hair,
+      _occasionItemCount,
+    );
+    _eyeMakeup = OccasionPaletteSelector.select(
+      occ,
+      _profile.eyeMakeup,
+      _occasionItemCount,
+    );
+    _blush = OccasionPaletteSelector.select(
+      occ,
+      _profile.blush,
+      _occasionItemCount,
+    );
+    _lipstick = OccasionPaletteSelector.select(
+      occ,
+      _profile.lipstick,
+      _occasionItemCount,
+    );
+    _jewelry = OccasionPaletteSelector.select(
+      occ,
+      _profile.jewelry,
+      _occasionItemCount,
+    );
+  }
+
   void _shuffleTops() {
     setState(() {
-      int next;
-      do {
-        next = Random().nextInt(_topsGroupCount);
-      } while (next == _topsGroupIndex);
-      _topsGroupIndex = next;
       _selectedTopIndex = null;
+      _clearMatches();
+      if (_occasion == null) {
+        int next;
+        do {
+          next = Random().nextInt(_topsGroupCount);
+        } while (next == _topsGroupIndex && _topsGroupCount > 1);
+        _topsGroupIndex = next;
+        _tops = _topsFromGroup();
+      } else {
+        _tops = OccasionPaletteSelector.select(
+          _occasion!,
+          _profile.topsPool,
+          _occasionItemCount,
+        );
+      }
     });
+    _scheduleRecompute();
   }
 
   void _setNightMode(bool value) {
@@ -81,213 +232,394 @@ class _ResultScreenState extends State<ResultScreen> {
     });
   }
 
-  //จับคู่สี
-  void _onTopTap(int index) {
+  Future<void> _showOccasionPicker() async {
+    final chosen = await showModalBottomSheet<Object?>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _OccasionSheet(current: _occasion),
+    );
+    if (chosen == _unchanged) return;
     setState(() {
-      _selectedTopIndex = _selectedTopIndex == index ? null : index;
+      _occasion = chosen as Occasion?;
+      _loadProfile();
     });
   }
 
-  //คำนวณระยะห่างของสีในอวกาศ Lab เพื่อหาสีที่ใกล้เคียงที่สุด
-  double _colorDistance(Color a, Color b) {
-    final labA = _rgbToLab(a);
-    final labB = _rgbToLab(b);
-    final dl = labA[0] - labB[0];
-    final da = labA[1] - labB[1];
-    final db = labA[2] - labB[2];
-    return sqrt(dl * dl + da * da + db * db);
-  }
-
-  List<double> _rgbToLab(Color c) {
-    double r = c.red / 255.0, g = c.green / 255.0, b = c.blue / 255.0;
-    r = r > 0.04045 ? pow((r + 0.055) / 1.055, 2.4).toDouble() : r / 12.92;
-    g = g > 0.04045 ? pow((g + 0.055) / 1.055, 2.4).toDouble() : g / 12.92;
-    b = b > 0.04045 ? pow((b + 0.055) / 1.055, 2.4).toDouble() : b / 12.92;
-    r *= 100;
-    g *= 100;
-    b *= 100;
-
-    final x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 95.047;
-    final y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 100.0;
-    final z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 108.883;
-
-    double f(double t) =>
-        t > 0.008856 ? pow(t, 1 / 3).toDouble() : (7.787 * t) + 16 / 116;
-
-    final fx = f(x), fy = f(y), fz = f(z);
-    return [(116 * fy) - 16, 500 * (fx - fy), 200 * (fy - fz)];
-  }
-
-  int? _nearestIndex(Color target, List<SwatchItem> items) {
-    if (items.isEmpty) return null;
-    int bestIndex = 0;
-    double bestDist = double.infinity;
-    for (int i = 0; i < items.length; i++) {
-      final d = _colorDistance(target, items[i].color);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIndex = i;
+  void _onTopTap(int index) {
+    setState(() {
+      if (_selectedTopIndex == index) {
+        _selectedTopIndex = null;
+        _clearMatches();
+      } else {
+        _selectedTopIndex = index;
+        final color = _tops[index].color;
+        final rnd = Random();
+        _matchedBottoms = ColorUtils.pickHarmoniousIndex(
+          color,
+          _bottoms.map((e) => e.color).toList(),
+          random: rnd,
+        );
+        _matchedHair = ColorUtils.pickHarmoniousIndex(
+          color,
+          _hair.map((e) => e.color).toList(),
+          random: rnd,
+        );
+        _matchedEye = ColorUtils.pickHarmoniousIndex(
+          color,
+          _eyeMakeup.map((e) => e.color).toList(),
+          random: rnd,
+        );
+        _matchedBlush = ColorUtils.pickHarmoniousIndex(
+          color,
+          _blush.map((e) => e.color).toList(),
+          random: rnd,
+        );
+        _matchedLipstick = ColorUtils.pickHarmoniousIndex(
+          color,
+          _lipstick.map((e) => e.color).toList(),
+          random: rnd,
+        );
+        _matchedJewelry = ColorUtils.pickHarmoniousIndex(
+          color,
+          _jewelry.map((e) => e.color).toList(),
+          random: rnd,
+        );
       }
+    });
+    // Sections collapse to a single swatch (or back to a full grid),
+    // which changes their height — re-measure the trail after that layout settles.
+    _scheduleRecompute();
+  }
+
+  void _clearMatches() {
+    _matchedBottoms = null;
+    _matchedHair = null;
+    _matchedEye = null;
+    _matchedBlush = null;
+    _matchedLipstick = null;
+    _matchedJewelry = null;
+  }
+
+  // ---- helpers shared by the inline sections and the floating trail ----
+
+  String _sectionTitle(String id) {
+    switch (id) {
+      case 'tops':
+        return 'Tops';
+      case 'bottoms':
+        return 'Bottoms';
+      case 'hair':
+        return 'Hair';
+      case 'eye':
+        return 'Eye Makeup';
+      case 'blush':
+        return 'Blush';
+      case 'lipstick':
+        return 'Lipstick';
+      case 'jewelry':
+        return 'Jewelry';
     }
-    return bestIndex;
+    return '';
+  }
+
+  List<SwatchItem> _sectionItems(String id) {
+    switch (id) {
+      case 'tops':
+        return _tops;
+      case 'bottoms':
+        return _bottoms;
+      case 'hair':
+        return _hair;
+      case 'eye':
+        return _eyeMakeup;
+      case 'blush':
+        return _blush;
+      case 'lipstick':
+        return _lipstick;
+      case 'jewelry':
+        return _jewelry;
+    }
+    return const [];
+  }
+
+  // For 'tops' this is just the user's tapped swatch; for every other
+  // section it's the harmony-matched swatch computed in _onTopTap.
+  int? _matchedIndexFor(String id) {
+    switch (id) {
+      case 'tops':
+        return _selectedTopIndex;
+      case 'bottoms':
+        return _matchedBottoms;
+      case 'hair':
+        return _matchedHair;
+      case 'eye':
+        return _matchedEye;
+      case 'blush':
+        return _matchedBlush;
+      case 'lipstick':
+        return _matchedLipstick;
+      case 'jewelry':
+        return _matchedJewelry;
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedColor = _selectedTopIndex != null
-        ? _tops[_selectedTopIndex!].color
-        : null;
-
-    final matchedBottoms = selectedColor == null
-        ? null
-        : _nearestIndex(selectedColor, _bottoms);
-    final matchedHair = selectedColor == null
-        ? null
-        : _nearestIndex(selectedColor, _profile.hair);
-    final matchedEyeMakeup = selectedColor == null
-        ? null
-        : _nearestIndex(selectedColor, _profile.eyeMakeup);
-    final matchedBlush = selectedColor == null
-        ? null
-        : _nearestIndex(selectedColor, _profile.blush);
-    final matchedLipstick = selectedColor == null
-        ? null
-        : _nearestIndex(selectedColor, _profile.lipstick);
-    final matchedJewelry = selectedColor == null
-        ? null
-        : _nearestIndex(selectedColor, _profile.jewelry);
-
     return GradientScaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            _buildResultHeader(),
-            const SizedBox(height: 18),
-            _buildDayNightToggle(),
-            const SizedBox(height: 8),
-            if (_selectedTopIndex != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Paired with the colors ringed in gold below ,tap another swatch to change, or tap it again to clear.',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.mid,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 8),
-
-            _paletteSection(
-              'Tops',
-              _tops,
-              big: true,
-              selectable: true,
-              sparkle: true,
-              selectedIndex: _selectedTopIndex,
-              onTapItem: _onTopTap,
-              onShuffle: _shuffleTops,
-            ),
-            _paletteSection(
-              'Bottoms',
-              _bottoms,
-              sparkle: true,
-              matchedIndex: matchedBottoms,
-            ),
-            _paletteSection(
-              'Recommended Hair Colors',
-              _profile.hair,
-              sparkle: true,
-              matchedIndex: matchedHair,
-            ),
-            _paletteSection(
-              'Eye Makeup',
-              _profile.eyeMakeup,
-              sparkle: true,
-              matchedIndex: matchedEyeMakeup,
-            ),
-            _paletteSection(
-              'Blush Palette',
-              _profile.blush,
-              sparkle: true,
-              matchedIndex: matchedBlush,
-            ),
-            _paletteSection(
-              'Lipstick Palette',
-              _profile.lipstick,
-              sparkle: true,
-              matchedIndex: matchedLipstick,
-            ),
-            _paletteSection(
-              'Jewelry',
-              _profile.jewelry,
-              sparkle: true,
-              matchedIndex: matchedJewelry,
-            ),
-
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: AppColors.white,
-                  foregroundColor: AppColors.charcoal,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  side: BorderSide.none,
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ClothingScreen(season: widget.season),
-                  ),
-                ),
-                icon: const Icon(Icons.checkroom_outlined, size: 18),
-                label: const Text('Check an Outfit'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.blush, AppColors.gold],
-                  ),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    foregroundColor: AppColors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+      body: Stack(
+        key: _stackKey,
+        children: [
+          SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                _buildResultHeader(),
+                const SizedBox(height: 18),
+                _buildDayNightToggle(),
+                if (_occasion != null) _buildOccasionBanner(),
+                const SizedBox(height: 8),
+                if (_selectedTopIndex != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Paired with the colors ringed in gold below ,tap another swatch to change, or tap it again to clear.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.mid,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SelectScreen()),
+                const SizedBox(height: 8),
+
+                KeyedSubtree(
+                  key: _sectionKeys['tops'],
+                  child: _paletteSection(
+                    'tops',
+                    'Tops',
+                    _tops,
+                    big: true,
+                    selectable: true,
+                    sparkle: true,
+                    selectedIndex: _selectedTopIndex,
+                    onTapItem: _onTopTap,
+                    onShuffle: _shuffleTops,
                   ),
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Analyze Again'),
                 ),
-              ),
+                KeyedSubtree(
+                  key: _sectionKeys['bottoms'],
+                  child: _paletteSection(
+                    'bottoms',
+                    'Bottoms',
+                    _bottoms,
+                    sparkle: true,
+                    matchedIndex: _matchedBottoms,
+                    matchOnlyMode: true,
+                  ),
+                ),
+                KeyedSubtree(
+                  key: _sectionKeys['hair'],
+                  child: _paletteSection(
+                    'hair',
+                    'Recommended Hair Colors',
+                    _hair,
+                    sparkle: true,
+                    matchedIndex: _matchedHair,
+                    matchOnlyMode: true,
+                  ),
+                ),
+                KeyedSubtree(
+                  key: _sectionKeys['eye'],
+                  child: _paletteSection(
+                    'eye',
+                    'Eye Makeup',
+                    _eyeMakeup,
+                    sparkle: true,
+                    matchedIndex: _matchedEye,
+                    matchOnlyMode: true,
+                  ),
+                ),
+                KeyedSubtree(
+                  key: _sectionKeys['blush'],
+                  child: _paletteSection(
+                    'blush',
+                    'Blush Palette',
+                    _blush,
+                    sparkle: true,
+                    matchedIndex: _matchedBlush,
+                    matchOnlyMode: true,
+                  ),
+                ),
+                KeyedSubtree(
+                  key: _sectionKeys['lipstick'],
+                  child: _paletteSection(
+                    'lipstick',
+                    'Lipstick Palette',
+                    _lipstick,
+                    sparkle: true,
+                    matchedIndex: _matchedLipstick,
+                    matchOnlyMode: true,
+                  ),
+                ),
+                KeyedSubtree(
+                  key: _sectionKeys['jewelry'],
+                  child: _paletteSection(
+                    'jewelry',
+                    'Jewelry',
+                    _jewelry,
+                    sparkle: true,
+                    matchedIndex: _matchedJewelry,
+                    matchOnlyMode: true,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+                // Check an Outfit + Analyze Again — unchanged, per spec.
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: AppColors.white,
+                      foregroundColor: AppColors.charcoal,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      side: BorderSide.none,
+                    ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ClothingScreen(season: widget.season),
+                      ),
+                    ),
+                    icon: const Icon(Icons.checkroom_outlined, size: 18),
+                    label: const Text('Check an Outfit'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.blush, AppColors.gold],
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: AppColors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SelectScreen()),
+                      ),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Analyze Again'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
             ),
-            const SizedBox(height: 24),
-          ],
-        ),
+          ),
+          _buildFloatingTrail(),
+        ],
       ),
     );
   }
 
+  // ---- floating "trail" of mini palette bars ----
+
+  Widget _buildFloatingTrail() {
+    if (_passedSections.isEmpty) return const SizedBox.shrink();
+    final visible = _passedSections.length > _maxTrailBars
+        ? _passedSections.sublist(_passedSections.length - _maxTrailBars)
+        : _passedSections;
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: visible.map(_miniBar).toList(),
+      ),
+    );
+  }
+
+  Widget _miniBar(String id) {
+    final allItems = _sectionItems(id);
+    final matchedIdx = _matchedIndexFor(id);
+    final showMatchOnly = _selectedTopIndex != null && matchedIdx != null;
+    final items = showMatchOnly ? [allItems[matchedIdx!]] : allItems;
+
+    return Container(
+      key: ValueKey('trail_$id'),
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.white.withOpacity(0.97),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.charcoal.withOpacity(0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 82,
+            child: Text(
+              _sectionTitle(id),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.charcoal,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Row(
+              children: items
+                  .take(9)
+                  .map(
+                    (s) => Container(
+                      width: 18,
+                      height: 18,
+                      margin: const EdgeInsets.only(right: 5),
+                      decoration: BoxDecoration(
+                        color: s.color,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.4),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  //header
   Widget _buildResultHeader() {
     return Container(
       width: double.infinity,
@@ -324,11 +656,9 @@ class _ResultScreenState extends State<ResultScreen> {
                 ),
               ),
               _circleIconButton(
-                Icons.ios_share,
+                _occasion == null ? Icons.tune : _occasion!.icon,
                 small: true,
-                onTap: () {
-                  // TODO: implement share result.
-                },
+                onTap: _showOccasionPicker,
               ),
             ],
           ),
@@ -411,6 +741,7 @@ class _ResultScreenState extends State<ResultScreen> {
     required VoidCallback onTap,
     bool small = false,
   }) {
+    //ปุ่มวงกลม
     return IconButton(
       onPressed: onTap,
       icon: Container(
@@ -479,7 +810,44 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  Widget _buildOccasionBanner() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.cream,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(_occasion!.icon, size: 16, color: AppColors.gold),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Color palette for ${_occasion!.label} • ${_occasion!.subtitle}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.charcoal,
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() {
+                _occasion = null;
+                _loadProfile();
+              }),
+              child: const Icon(Icons.close, size: 16, color: AppColors.mid),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _paletteSection(
+    String id,
     String title,
     List<SwatchItem> items, {
     bool big = false,
@@ -489,7 +857,14 @@ class _ResultScreenState extends State<ResultScreen> {
     int? matchedIndex,
     void Function(int index)? onTapItem,
     VoidCallback? onShuffle,
+    bool matchOnlyMode = false,
   }) {
+    // When a top is selected and this section has a harmony match,
+    // collapse the whole row down to just that one matched swatch.
+    final showMatchOnly = matchOnlyMode && matchedIndex != null;
+    final displayItems = showMatchOnly ? [items[matchedIndex!]] : items;
+    final effectiveMatchedIndex = showMatchOnly ? 0 : matchedIndex;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
@@ -516,6 +891,17 @@ class _ResultScreenState extends State<ResultScreen> {
                   color: AppColors.charcoal,
                 ),
               ),
+              if (showMatchOnly) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '• matched',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: AppColors.gold,
+                  ),
+                ),
+              ],
               if (onShuffle != null) ...[
                 const SizedBox(width: 8),
                 _ShuffleButton(onTap: onShuffle),
@@ -526,14 +912,14 @@ class _ResultScreenState extends State<ResultScreen> {
           Wrap(
             spacing: 14,
             runSpacing: 14,
-            children: items.asMap().entries.map((entry) {
+            children: displayItems.asMap().entries.map((entry) {
               final i = entry.key;
               final s = entry.value;
               return _SwatchTile(
                 item: s,
                 size: 100,
                 selected: selectable && selectedIndex == i,
-                matched: matchedIndex == i,
+                matched: effectiveMatchedIndex == i,
                 onSelect: selectable && onTapItem != null
                     ? () => onTapItem(i)
                     : null,
@@ -541,6 +927,98 @@ class _ResultScreenState extends State<ResultScreen> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Sentinel used to tell "sheet dismissed without a choice" apart from
+// "user explicitly picked 'show all' (null)".
+const Object _unchanged = Object();
+
+class _OccasionSheet extends StatelessWidget {
+  final Occasion? current;
+  const _OccasionSheet({required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tile(
+      String label,
+      String? subtitle,
+      IconData icon,
+      Occasion? value,
+    ) {
+      final active = current == value;
+      return ListTile(
+        leading: Icon(icon, color: active ? AppColors.gold : AppColors.mid),
+        title: Text(
+          label,
+          style: TextStyle(
+            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+            color: AppColors.charcoal,
+          ),
+        ),
+        subtitle: subtitle != null
+            ? Text(
+                subtitle,
+                style: const TextStyle(fontSize: 11.5, color: AppColors.mid),
+              )
+            : null,
+        trailing: active
+            ? const Icon(Icons.check, color: AppColors.gold)
+            : null,
+        onTap: () => Navigator.pop(context, value),
+      );
+    }
+
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, _unchanged);
+        return false;
+      },
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 6),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.mid.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Choose Occasion',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.charcoal,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              tile('Show All (Default)', null, Icons.palette_outlined, null),
+              const Divider(height: 1),
+              for (final occ in Occasion.values)
+                tile(occ.label, occ.subtitle, occ.icon, occ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -576,6 +1054,7 @@ class _SwatchTile extends StatelessWidget {
           ),
         );
       },
+      //แสดงสีและชื่อของ swatch
       child: SizedBox(
         width: size,
         child: Column(

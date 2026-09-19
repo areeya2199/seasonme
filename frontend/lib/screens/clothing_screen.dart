@@ -1,10 +1,18 @@
 import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../data/season_palette.dart';
+import '../utils/color_utils.dart';
 
-//หน้านี้ยังไม่เสร็จสมบูรณ์
+// Outfit Checker: the user photographs (or uploads) a piece of clothing,
+// the app samples its color, and checks how close that color is to the
+// SAME season the user got on the Result screen — Winter photos compare
+// only to the Winter palette, Autumn to Autumn, and so on for all 4
+// seasons, since `_profile` below is always built from `widget.season`.
+// No manual color picking: the photo is the only input.
 class ClothingScreen extends StatefulWidget {
   final SeasonKey season;
   const ClothingScreen({super.key, this.season = SeasonKey.Autumn});
@@ -15,10 +23,25 @@ class ClothingScreen extends StatefulWidget {
 
 enum _LoadState { idle, loading, done, error }
 
+class _OutfitMatch {
+  final int percent;
+  final MatchLevel level;
+  final SwatchItem closest;
+  final String closestCategory;
+  const _OutfitMatch(
+    this.percent,
+    this.level,
+    this.closest,
+    this.closestCategory,
+  );
+}
+
 class _ClothingScreenState extends State<ClothingScreen> {
   File? _pickedImage;
+  Color? _sampledColor;
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
+  _OutfitMatch? _result;
 
   late final SeasonProfile _profile = SeasonPaletteData.getProfile(
     widget.season,
@@ -39,15 +62,92 @@ class _ClothingScreenState extends State<ClothingScreen> {
         _pickedImage = file;
         _state = _LoadState.loading;
         _errorMessage = null;
-        // _verdict = null;
-        // _detected = null;
+        _result = null;
+        _sampledColor = null;
+      });
+
+      final color = await _extractDominantColor(file);
+      final match = _matchAgainstSeason(color);
+      if (!mounted) return;
+      setState(() {
+        _sampledColor = color;
+        _result = match;
+        _state = _LoadState.done;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _state = _LoadState.error;
-        _errorMessage = 'Unable to select photo.';
+        _errorMessage = 'อ่านสีจากภาพไม่สำเร็จ ลองใหม่อีกครั้ง';
       });
     }
+  }
+
+  // ---- "Take a photo and detect the color": average the center of the
+  // frame, where the garment usually fills the shot while background
+  // tends to sit toward the edges. No extra package needed — dart:ui
+  // decodes the image and we read raw RGBA bytes directly. ----
+  Future<Color> _extractDominantColor(File file) async {
+    final bytes = await file.readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes, targetWidth: 120);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) return Colors.grey;
+
+    final pixels = byteData.buffer.asUint8List();
+    final w = image.width, h = image.height;
+    final x0 = (w * 0.2).round(), x1 = (w * 0.8).round();
+    final y0 = (h * 0.2).round(), y1 = (h * 0.8).round();
+
+    int rSum = 0, gSum = 0, bSum = 0, count = 0;
+    for (int y = y0; y < y1; y += 2) {
+      for (int x = x0; x < x1; x += 2) {
+        final i = (y * w + x) * 4;
+        if (i + 3 >= pixels.length) continue;
+        final a = pixels[i + 3];
+        if (a < 200) continue;
+        rSum += pixels[i];
+        gSum += pixels[i + 1];
+        bSum += pixels[i + 2];
+        count++;
+      }
+    }
+    if (count == 0) return Colors.grey;
+    return Color.fromARGB(
+      255,
+      (rSum / count).round(),
+      (gSum / count).round(),
+      (bSum / count).round(),
+    );
+  }
+
+  // ---- Compare only against THIS season's own palette. If the result
+  // screen showed Winter, this checks against Winter only — and so on
+  // for each of the 4 seasons. ----
+  _OutfitMatch _matchAgainstSeason(Color color) {
+    final candidates = <MapEntry<String, SwatchItem>>[
+      for (final s in _profile.topsPool) MapEntry('เสื้อผ้า', s),
+      for (final s in _profile.bottoms) MapEntry('เสื้อผ้า', s),
+      for (final s in _profile.jewelry) MapEntry('เครื่องประดับ', s),
+    ];
+
+    double bestDist = double.infinity;
+    late MapEntry<String, SwatchItem> best;
+    for (final c in candidates) {
+      final d = ColorUtils.labDistance(color, c.value.color);
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    }
+    final percent = ColorUtils.distanceToPercent(bestDist);
+    return _OutfitMatch(
+      percent,
+      matchLevelFromPercent(percent),
+      best.value,
+      best.key,
+    );
   }
 
   void _showSourceSheet() {
@@ -145,7 +245,6 @@ class _ClothingScreenState extends State<ClothingScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Upload area — tappable, opens camera/gallery sheet.
               GestureDetector(
                 onTap: _showSourceSheet,
                 child: _pickedImage == null
@@ -207,24 +306,26 @@ class _ClothingScreenState extends State<ClothingScreen> {
                         ),
                       ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              const SizedBox(height: 12),
-              const Text(
-                'Or tap a swatch from your clothing palette',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.charcoal,
-                ),
-              ),
-              const SizedBox(height: 12),
+              if (_state == _LoadState.loading) _buildLoading(),
+              if (_state == _LoadState.error) _buildError(),
+              if (_state == _LoadState.done && _result != null)
+                _buildResultCard(),
+              if (_state == _LoadState.idle) _buildIdleHint(),
 
               const SizedBox(height: 24),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIdleHint() {
+    return Text(
+      'ถ่ายหรืออัปโหลดรูปเสื้อผ้า แล้วแอปจะตรวจสีให้อัตโนมัติว่าเข้ากับซีซั่น ${_profile.displayName} ของคุณแค่ไหน',
+      style: const TextStyle(fontSize: 12, color: AppColors.mid),
     );
   }
 
@@ -275,6 +376,132 @@ class _ClothingScreenState extends State<ClothingScreen> {
       ),
     );
   }
+
+  Widget _buildResultCard() {
+    final result = _result!;
+    final levelInfo = _levelInfo(result.level);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.charcoal.withOpacity(0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _sampledColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.compare_arrows, size: 16, color: AppColors.mid),
+              const SizedBox(width: 6),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: result.closest.color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      levelInfo.label,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: levelInfo.color,
+                      ),
+                    ),
+                    Text(
+                      'ใกล้เคียง ${result.closest.name} มากที่สุด',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.mid,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${result.percent}%',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: levelInfo.color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: result.percent / 100,
+              minHeight: 8,
+              backgroundColor: AppColors.cream,
+              valueColor: AlwaysStoppedAnimation(levelInfo.color),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            levelInfo.description,
+            style: const TextStyle(fontSize: 12, color: AppColors.mid),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _LevelInfo _levelInfo(MatchLevel level) {
+    switch (level) {
+      case MatchLevel.excellent:
+        return _LevelInfo(
+          'เข้ากับซีซั่นมาก',
+          const Color(0xFF3E9C6D),
+          'สีนี้อยู่ในโทนของ ${_profile.displayName} พอดี ใส่ได้อย่างมั่นใจ',
+        );
+      case MatchLevel.good:
+        return _LevelInfo(
+          'พอใช้ได้',
+          const Color(0xFFD9A441),
+          'สีนี้ใกล้เคียงกับโทน ${_profile.displayName} อยู่บ้าง ลองจับคู่กับชิ้นที่เป็นกลางเพิ่มเติม',
+        );
+      case MatchLevel.poor:
+        return _LevelInfo(
+          'ควรเลี่ยง',
+          const Color(0xFFC65B5B),
+          'สีนี้ค่อนข้างห่างจากโทนของ ${_profile.displayName} ลองถ่ายชิ้นอื่นเทียบดูอีกครั้ง',
+        );
+    }
+  }
+}
+
+class _LevelInfo {
+  final String label;
+  final Color color;
+  final String description;
+  const _LevelInfo(this.label, this.color, this.description);
 }
 
 //Simple dashed border
