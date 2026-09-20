@@ -36,6 +36,80 @@ right_cheek = [
 ]
 
 
+def _calculate_questionnaire_scores(answers):
+    score_map = {
+        "0": {
+            "Green": (1.0, 0.0),
+            "Blue / Purple": (0.0, 1.0),
+            "A mix of both": (0.5, 0.5),
+        },
+        "1": {
+            "Gold": (1.0, 0.0),
+            "Silver": (0.0, 1.0),
+            "Both look fine": (0.5, 0.5),
+        },
+        "2": {
+            "Tans easily, rarely burns": (1.0, 0.0),
+            "Burns easily, rarely tans": (0.0, 1.0),
+            "A little of both": (0.5, 0.5),
+        },
+    }
+
+    warm_score = 0.0
+    cool_score = 0.0
+    answered_count = 0
+
+    for key, answer_scores in score_map.items():
+        answer = answers.get(key)
+        if answer is None:
+            continue
+        warm_points, cool_points = answer_scores[answer]
+        warm_score += warm_points
+        cool_score += cool_points
+        answered_count += 1
+
+    if answered_count == 0:
+        warm_question = 0.5
+        cool_question = 0.5
+    else:
+        warm_question = warm_score / answered_count
+        cool_question = cool_score / answered_count
+
+    questionnaire_weight = 0.30 * (answered_count / 3)
+    image_weight = 1.0 - questionnaire_weight
+
+    return {
+        "warm": warm_question,
+        "cool": cool_question,
+        "answered_count": answered_count,
+        "questionnaire_weight": questionnaire_weight,
+        "image_weight": image_weight,
+    }
+
+
+def _select_season(undertone, preference, L_star, chroma):
+    if undertone == "Warm":
+        if preference == "Bright & vivid":
+            return "Spring"
+        if preference == "Deep & rich":
+            return "Autumn"
+
+        # Soft/muted and skipped preferences use image measurements.
+        if L_star > 66 and chroma >= 45:
+            return "Spring"
+        return "Autumn"
+
+    if preference == "Soft & muted":
+        return "Summer"
+    if preference == "Deep & rich":
+        return "Winter"
+
+    # Bright/vivid and skipped preferences use image measurements.
+    if L_star > 66 and chroma < 45:
+        return "Summer"
+    return "Winter"
+
+
 def analyze_skin(image, answers):
     
 
@@ -200,37 +274,7 @@ def analyze_skin(image, answers):
 
     
 
-    warm_score = 0.0
-    cool_score = 0.0
-
-# Q1 Vein Color
-    if answers["0"] == "Green":
-        warm_score += 1
-    elif answers["0"] == "Blue / Purple":
-        cool_score += 1
-    else:  
-        warm_score += 0.5
-        cool_score += 0.5
-
-
-# Q2 Jewelry
-    if answers["1"] == "Gold":
-        warm_score += 1
-    elif answers["1"] == "Silver":
-        cool_score += 1
-    else:  
-        warm_score += 0.5
-        cool_score += 0.5
-
-
-# Q3 Sun Reaction
-    if answers["2"] == "Tans easily, rarely burns":
-        warm_score += 1
-    elif answers["2"] == "Burns easily, rarely tans":
-        cool_score += 1
-    else: 
-        warm_score += 0.5
-        cool_score += 0.5
+    questionnaire = _calculate_questionnaire_scores(answers)
 
     
 
@@ -246,16 +290,27 @@ def analyze_skin(image, answers):
 
 
 
-    warm_question = warm_score / 3
-    cool_question = cool_score / 3
+    warm_question = questionnaire["warm"]
+    cool_question = questionnaire["cool"]
+    answered_count = questionnaire["answered_count"]
+    questionnaire_weight = questionnaire["questionnaire_weight"]
+    image_weight = questionnaire["image_weight"]
 
-    print("warm_score =", warm_score)
-    print("cool_score =", cool_score)
     print("warm_question =", warm_question)
     print("cool_question =", cool_question)
 
-    warm_total = image_warm * 0.70 + warm_question * 0.30
-    cool_total = image_cool * 0.70 + cool_question * 0.30
+# ---------------- Weighted Fusion ----------------
+# Image weight starts at 70%; questionnaire weight is at most 30% and
+# decreases by 10 percentage points for each skipped Q1-Q3 answer.
+
+    warm_total = (
+        image_warm * image_weight
+        + warm_question * questionnaire_weight
+    )
+    cool_total = (
+        image_cool * image_weight
+        + cool_question * questionnaire_weight
+    )
 
     print("warm_total =", warm_total)
     print("cool_total =", cool_total)
@@ -271,54 +326,12 @@ def analyze_skin(image, answers):
     
 
 
-    preference = answers["3"]
+    preference = answers.get("3")
 
 
 
 
-    if undertone == "Warm":
-
-
-        if preference == "Bright & vivid":
-            season = "Spring"
-
-        elif preference == "Deep & rich":
-            season = "Autumn"
-
-        elif preference == "Soft & muted":
-       
-            if L_star > 66 and chroma >= 45:
-                season = "Spring"
-            else:
-                season = "Autumn"
-
-        else:
-            if L_star > 66 and chroma >= 45:
-                season = "Spring"
-            else:
-                season = "Autumn"
-
-    else:
-
-  
-
-        if preference == "Soft & muted":
-            season = "Summer"
-
-        elif preference == "Deep & rich":
-            season = "Winter"
-
-        elif preference == "Bright & vivid":
-            if L_star > 66 and chroma < 45:
-                season = "Summer"
-            else:
-                season = "Winter"
-
-        else:
-            if L_star > 66 and chroma < 45:
-                season = "Summer"
-            else:
-                season = "Winter"
+    season = _select_season(undertone, preference, L_star, chroma)
     # # Personal Color 
     # if undertone == "Warm":
 
@@ -347,6 +360,10 @@ def analyze_skin(image, answers):
         # scores, rather than the questionnaire-only values below.
         "warm_total": round(warm_total, 2),
         "cool_total": round(cool_total, 2),
+
+        "answered_count": answered_count,
+        "questionnaire_weight": round(questionnaire_weight, 2),
+        "image_weight": round(image_weight, 2),
 
         "questionnaire": {
         "warm": round(warm_question, 2),
