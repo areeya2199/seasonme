@@ -13,7 +13,7 @@ import 'result_screen.dart';
 class ProcessingScreen extends StatefulWidget {
   final String? imagePath;
   // final String season;
-  final Map<int, String> answers;
+  final Map<int, String?> answers;
 
   const ProcessingScreen({
     super.key,

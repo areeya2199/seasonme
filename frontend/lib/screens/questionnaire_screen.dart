@@ -32,7 +32,7 @@ class QuestionnaireScreen extends StatefulWidget {
 class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int _step = 0;
   String? _selected;
-  final Map<int, String> _answers = {};
+  final Map<int, String?> _answers = {0: null, 1: null, 2: null, 3: null};
 
   //4 question
   final List<_QuizQuestion> _questions = [
@@ -75,7 +75,15 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   ];
 
   void _next() {
-    _answers[_step] = _selected!;
+    _advance(_selected);
+  }
+
+  void _skip() {
+    _advance(null);
+  }
+
+  void _advance(String? answer) {
+    _answers[_step] = answer;
 
     if (_step < _questions.length - 1) {
       setState(() {
@@ -93,6 +101,18 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     }
   }
 
+  void _back() {
+    if (_step == 0) {
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      _step--;
+      _selected = _answers[_step];
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = _questions[_step];
@@ -101,7 +121,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _back,
         ),
       ),
       body: SafeArea(
@@ -248,22 +268,13 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   ),
                 ),
               ),
-              // TextButton(
-              //   onPressed: () => Navigator.push(
-              //     context,
-              //     MaterialPageRoute(
-              //       builder: (_) => ProcessingScreen(
-              //         imagePath: widget.imagePath,
-              //         // season: widget.season,
-              //         answers: _answers,
-              //       ),
-              //     ),
-              //   ),
-              //   child: const Text(
-              //     'Skip',
-              //     style: TextStyle(color: AppColors.mid),
-              //   ),
-              // ),
+              TextButton(
+                onPressed: _skip,
+                child: const Text(
+                  'Skip',
+                  style: TextStyle(color: AppColors.mid),
+                ),
+              ),
               const SizedBox(height: 12),
             ],
           ),

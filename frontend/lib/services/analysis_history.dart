@@ -60,7 +60,7 @@ class AnalysisHistoryService {
   static Future<void> addEntry({
     required SeasonKey season,
     required Map<String, dynamic> analysis,
-    required Map<String, String> questionnaireAnswers,
+    required Map<String, String?> questionnaireAnswers,
   }) async {
     final collection = _collection;
     if (collection == null) return;

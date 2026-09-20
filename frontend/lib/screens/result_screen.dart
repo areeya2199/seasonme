@@ -14,7 +14,7 @@ class ResultScreen extends StatefulWidget {
   final SeasonKey season;
   final bool recordToHistory;
   final Map<String, dynamic>? analysis;
-  final Map<String, String>? questionnaireAnswers;
+  final Map<String, String?>? questionnaireAnswers;
 
   const ResultScreen({
     super.key,
