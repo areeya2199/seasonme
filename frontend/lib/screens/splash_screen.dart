@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/screens/login.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
 import '../services/preferences.dart';
 import 'home_screen.dart';
 import 'login.dart';
@@ -29,11 +30,17 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     final isLoggedIn = results[1] as bool;
+    final hasActiveFirebaseSession = AuthService.currentUser != null;
+    if (isLoggedIn && !hasActiveFirebaseSession) {
+      await AppPrefs.setLoggedIn(false);
+    }
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => isLoggedIn ? const HomeScreen() : const LoginScreen(),
+        builder: (_) => isLoggedIn && hasActiveFirebaseSession
+            ? const HomeScreen()
+            : const LoginScreen(),
       ),
     );
   }

@@ -3,7 +3,9 @@ import 'package:frontend/screens/splash_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/analysis_history.dart';
+import '../services/preferences.dart';
 import '../data/season_palette.dart';
+import '../utils/color_utils.dart';
 import 'result_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -255,6 +257,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               email,
               style: const TextStyle(fontSize: 12, color: AppColors.mid),
             ),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () => _editName(displayName),
+              child: const Text(
+                'Edit Name',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.blush,
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
 
             if (!_loadingHistory) _buildSeasonCard(latest),
@@ -296,7 +310,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  await AuthService.signOut();
+                  await AppPrefs.setLoggedIn(false);
+                  if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (_) => const SplashScreen()),
@@ -322,6 +339,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // Restyled to match the warm brown "YOUR SEASON" card design used
+  // elsewhere in the app (same look as the Home / Result personal-color card).
   Widget _buildSeasonCard(AnalysisHistoryEntry? latest) {
     if (latest == null) {
       return SoftCard(
@@ -340,8 +359,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     }
-    final groupColor = SeasonPaletteData.groupColorOf(latest.season);
-    return SoftCard(
+    final profile = SeasonPaletteData.getProfile(latest.season);
+    final chroma = ColorUtils.chromaLabel(
+      profile.topsPool.map((s) => s.color).toList(),
+    );
+
+    return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -349,39 +372,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ResultScreen(season: latest.season, recordToHistory: false),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: groupColor.withOpacity(0.4),
-              shape: BoxShape.circle,
-            ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF6B4E36), Color(0xFF8A6A47)],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'YOUR SEASON',
+              style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 1.4,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withOpacity(0.75),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  'Your latest Analysis Result',
-                  style: TextStyle(fontSize: 11, color: AppColors.mid),
+                Expanded(
+                  child: Text(
+                    profile.displayName,
+                    style: const TextStyle(
+                      fontFamily: 'Lora',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-                Text(
-                  SeasonPaletteData.labelOf(latest.season),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.charcoal,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '${profile.core.warm ? 'Warm' : 'Cool'} · $chroma',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          const Icon(Icons.chevron_right, color: AppColors.mid, size: 20),
-        ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Text(
+                  'View My Colors',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward,
+                  size: 14,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -400,8 +469,9 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
   late List<AnalysisHistoryEntry> _items = List.of(widget.history);
 
   Future<void> _remove(int index) async {
+    final item = _items[index];
     setState(() => _items.removeAt(index));
-    await AnalysisHistoryService.removeAt(index);
+    await AnalysisHistoryService.remove(item.id);
     widget.onChanged();
   }
 

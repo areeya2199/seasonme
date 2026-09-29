@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -36,9 +37,20 @@ class _OutfitMatch {
   );
 }
 
+// Result of the on-device pixel analysis: the sampled color plus two rough
+// texture/hue signals used only as a heuristic "does this even look like a
+// photo of plain clothing" check — not a real image classifier.
+class _ImageAnalysis {
+  final Color color;
+  final double textureVariance;
+  final double greenShare;
+  const _ImageAnalysis(this.color, this.textureVariance, this.greenShare);
+}
+
 class _ClothingScreenState extends State<ClothingScreen> {
   File? _pickedImage;
   Color? _sampledColor;
+  bool _looksSuspicious = false;
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
   _OutfitMatch? _result;
@@ -64,13 +76,20 @@ class _ClothingScreenState extends State<ClothingScreen> {
         _errorMessage = null;
         _result = null;
         _sampledColor = null;
+        _looksSuspicious = false;
       });
 
-      final color = await _extractDominantColor(file);
-      final match = _matchAgainstSeason(color);
+      final analysis = await _analyzeImage(file);
+      final match = _matchAgainstSeason(analysis.color);
       if (!mounted) return;
       setState(() {
-        _sampledColor = color;
+        _sampledColor = analysis.color;
+        // Heuristic only: high pixel-to-pixel variance in the sampled area
+        // (fur/foliage texture) or a strong green cast (grass/leaves/skin)
+        // suggests this may not be a plain garment. This is a rough signal,
+        // not a real "is this clothing" classifier.
+        _looksSuspicious =
+            analysis.textureVariance > 55 || analysis.greenShare > 0.35;
         _result = match;
         _state = _LoadState.done;
       });
@@ -83,48 +102,67 @@ class _ClothingScreenState extends State<ClothingScreen> {
     }
   }
 
-  // ---- "Take a photo and detect the color": average the center of the
-  // frame, where the garment usually fills the shot while background
-  // tends to sit toward the edges. No extra package needed — dart:ui
-  // decodes the image and we read raw RGBA bytes directly. ----
-  Future<Color> _extractDominantColor(File file) async {
+  // ---- "Take a photo and detect the color": average the center 60% of the
+  // frame, where the garment usually fills the shot while background tends
+  // to sit toward the edges. Also computes two rough signals (pixel
+  // variance and green-hue share) used only for the soft "does this look
+  // like clothing" warning below — this stays a heuristic, not true scene
+  // classification, since there's no vision model running on-device here.
+  Future<_ImageAnalysis> _analyzeImage(File file) async {
     final bytes = await file.readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes, targetWidth: 120);
     final frame = await codec.getNextFrame();
     final image = frame.image;
     final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    if (byteData == null) return Colors.grey;
+    if (byteData == null) return const _ImageAnalysis(Colors.grey, 0, 0);
 
     final pixels = byteData.buffer.asUint8List();
     final w = image.width, h = image.height;
     final x0 = (w * 0.2).round(), x1 = (w * 0.8).round();
     final y0 = (h * 0.2).round(), y1 = (h * 0.8).round();
 
-    int rSum = 0, gSum = 0, bSum = 0, count = 0;
+    int rSum = 0, gSum = 0, bSum = 0, count = 0, greenCount = 0;
+    final samples = <List<int>>[];
     for (int y = y0; y < y1; y += 2) {
       for (int x = x0; x < x1; x += 2) {
         final i = (y * w + x) * 4;
         if (i + 3 >= pixels.length) continue;
         final a = pixels[i + 3];
         if (a < 200) continue;
-        rSum += pixels[i];
-        gSum += pixels[i + 1];
-        bSum += pixels[i + 2];
+        final r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+        rSum += r;
+        gSum += g;
+        bSum += b;
         count++;
+        samples.add([r, g, b]);
+        final hsl = HSLColor.fromColor(Color.fromARGB(255, r, g, b));
+        if (hsl.hue >= 70 && hsl.hue <= 160 && hsl.saturation > 0.25) {
+          greenCount++;
+        }
       }
     }
-    if (count == 0) return Colors.grey;
-    return Color.fromARGB(
-      255,
-      (rSum / count).round(),
-      (gSum / count).round(),
-      (bSum / count).round(),
+    if (count == 0) return const _ImageAnalysis(Colors.grey, 0, 0);
+
+    final avgR = rSum / count, avgG = gSum / count, avgB = bSum / count;
+    double varSum = 0;
+    for (final s in samples) {
+      final dr = s[0] - avgR, dg = s[1] - avgG, db = s[2] - avgB;
+      varSum += dr * dr + dg * dg + db * db;
+    }
+    final variance = sqrt(varSum / count);
+    final greenShare = greenCount / count;
+
+    return _ImageAnalysis(
+      Color.fromARGB(255, avgR.round(), avgG.round(), avgB.round()),
+      variance,
+      greenShare,
     );
   }
 
   // ---- Compare only against THIS season's own palette. If the result
   // screen showed Winter, this checks against Winter only — and so on
-  // for each of the 4 seasons. ----
+  // for each of the 4 seasons. Picks whichever single color has the
+  // smallest perceptual (Lab) distance — that's "closest" and "why". ----
   _OutfitMatch _matchAgainstSeason(Color color) {
     final candidates = <MapEntry<String, SwatchItem>>[
       for (final s in _profile.topsPool) MapEntry('เสื้อผ้า', s),
@@ -310,8 +348,12 @@ class _ClothingScreenState extends State<ClothingScreen> {
 
               if (_state == _LoadState.loading) _buildLoading(),
               if (_state == _LoadState.error) _buildError(),
-              if (_state == _LoadState.done && _result != null)
+              if (_state == _LoadState.done && _result != null) ...[
+                if (_looksSuspicious) _buildSuspiciousBanner(),
                 _buildResultCard(),
+                const SizedBox(height: 10),
+                _buildExplanationCard(),
+              ],
               if (_state == _LoadState.idle) _buildIdleHint(),
 
               const SizedBox(height: 24),
@@ -370,6 +412,35 @@ class _ClothingScreenState extends State<ClothingScreen> {
             child: Text(
               _errorMessage ?? 'Something went wrong.',
               style: const TextStyle(fontSize: 12.5, color: AppColors.charcoal),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuspiciousBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E0),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8C57A).withOpacity(0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFB07A1E),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'This photo has a lot of texture or a strong green tone — it might be a plant, animal or scenery shot rather than plain fabric. For a reliable check, photograph a flat, evenly-lit piece of clothing.',
+              style: TextStyle(fontSize: 12, color: const Color(0xFF6B4E12)),
             ),
           ),
         ],
@@ -470,6 +541,59 @@ class _ClothingScreenState extends State<ClothingScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Explains WHERE the sampled color came from, and WHICH part of the
+  // palette it was compared to and WHY that particular color was picked.
+  Widget _buildExplanationCard() {
+    final result = _result!;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _explanationRow(
+            Icons.crop_free,
+            'Sampled from the middle ~60% of your photo, so edge/background pixels are ignored.',
+          ),
+          const SizedBox(height: 8),
+          _explanationRow(
+            Icons.category_outlined,
+            'Compared against the "${result.closestCategory}" colors in your ${_profile.displayName} palette.',
+          ),
+          const SizedBox(height: 8),
+          _explanationRow(
+            Icons.emoji_objects_outlined,
+            '"${result.closest.name}" was picked because it has the smallest color difference to your photo out of every color in that group.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _explanationRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 15, color: AppColors.gold),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 11.5,
+              color: AppColors.charcoal,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

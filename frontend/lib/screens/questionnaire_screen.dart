@@ -20,7 +20,6 @@ class _QuizOption {
   _QuizOption({required this.label, required this.hint});
 }
 
-//Questionnaire
 class QuestionnaireScreen extends StatefulWidget {
   final String imagePath;
 
@@ -33,7 +32,7 @@ class QuestionnaireScreen extends StatefulWidget {
 class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int _step = 0;
   String? _selected;
-  final Map<int, String> _answers = {};
+  final Map<int, String?> _answers = {0: null, 1: null, 2: null, 3: null};
 
   //4 question
   final List<_QuizQuestion> _questions = [
@@ -76,7 +75,15 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   ];
 
   void _next() {
-    _answers[_step] = _selected!;
+    _advance(_selected);
+  }
+
+  void _skip() {
+    _advance(null);
+  }
+
+  void _advance(String? answer) {
+    _answers[_step] = answer;
 
     if (_step < _questions.length - 1) {
       setState(() {
@@ -94,6 +101,18 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     }
   }
 
+  void _back() {
+    if (_step == 0) {
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      _step--;
+      _selected = _answers[_step];
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = _questions[_step];
@@ -102,7 +121,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _back,
         ),
       ),
       body: SafeArea(
@@ -238,31 +257,58 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
               const Spacer(),
 
-              //Continue + Skip
+              // Continue box (top) and Skip box (bottom) — two clearly
+              // separate, equally-prominent boxes, with a caption under
+              // the skip box explaining the trade-off.
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _selected != null ? _next : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
                   child: Text(
                     _step == _questions.length - 1 ? 'Finish' : 'Continue',
-                    style: TextStyle(color: AppColors.white),
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProcessingScreen(
-                      imagePath: widget.imagePath,
-                      // season: widget.season,
-                      answers: _answers,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
                     ),
                   ),
                 ),
-                child: const Text(
-                  'Skip',
-                  style: TextStyle(color: AppColors.mid),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _skip,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: AppColors.mid.withOpacity(0.35)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  child: const Text(
+                    'Skip',
+                    style: TextStyle(
+                      color: AppColors.charcoal,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Skipping won\'t break the analysis it just makes the result a bit less precise.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: AppColors.mid),
                 ),
               ),
               const SizedBox(height: 12),
