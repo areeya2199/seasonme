@@ -257,22 +257,58 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
               const Spacer(),
 
-              //Continue + Skip
+              // Continue box (top) and Skip box (bottom) — two clearly
+              // separate, equally-prominent boxes, with a caption under
+              // the skip box explaining the trade-off.
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _selected != null ? _next : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
                   child: Text(
                     _step == _questions.length - 1 ? 'Finish' : 'Continue',
-                    style: TextStyle(color: AppColors.white),
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: _skip,
-                child: const Text(
-                  'Skip',
-                  style: TextStyle(color: AppColors.mid),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _skip,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: AppColors.mid.withOpacity(0.35)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  child: const Text(
+                    'Skip',
+                    style: TextStyle(
+                      color: AppColors.charcoal,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Skipping won\'t break the analysis it just makes the result a bit less precise.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: AppColors.mid),
                 ),
               ),
               const SizedBox(height: 12),

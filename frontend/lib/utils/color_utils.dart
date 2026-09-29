@@ -122,6 +122,8 @@ class ColorUtils {
     final pct = 100 * (1 - (distance / maxMeaningfulDistance)).clamp(0.0, 1.0);
     return pct.round();
   }
+
+  static chromaLabel(List<Color> list) {}
 }
 
 enum MatchLevel { excellent, good, poor }
