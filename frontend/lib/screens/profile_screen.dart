@@ -7,6 +7,7 @@ import '../services/preferences.dart';
 import '../data/season_palette.dart';
 import '../utils/color_utils.dart';
 import 'result_screen.dart';
+import '../theme/season_card_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -97,8 +98,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Help & Support',
                 style: TextStyle(
                   fontFamily: 'Lora',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.charcoal,
                 ),
               ),
@@ -320,12 +321,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     (route) => false,
                   );
                 },
-                icon: const Icon(Icons.logout, size: 16),
+                icon: const Icon(Icons.logout, size: 18),
                 label: const Text(
                   'Log Out',
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                     fontFamily: 'Nunito',
                     color: Color.fromARGB(255, 176, 90, 90),
                   ),
@@ -352,7 +353,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Expanded(
               child: Text(
                 'No color analysis available yet. Try starting on the main screen.',
-                style: TextStyle(fontSize: 13, color: AppColors.mid),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.mid,
+                ),
               ),
             ),
           ],
@@ -364,6 +369,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       profile.topsPool.map((s) => s.color).toList(),
     );
 
+    // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
+    final cardText = seasonCardText(latest.season);
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -376,10 +383,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF6B4E36), Color(0xFF8A6A47)],
+            colors: seasonCardGradient(latest.season),
           ),
           borderRadius: BorderRadius.circular(24),
         ),
@@ -389,10 +396,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text(
               'YOUR SEASON',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 letterSpacing: 1.4,
-                fontWeight: FontWeight.w700,
-                color: Colors.white.withOpacity(0.75),
+                fontWeight: FontWeight.normal,
+                color: cardText.label,
               ),
             ),
             const SizedBox(height: 4),
@@ -402,11 +409,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Expanded(
                   child: Text(
                     profile.displayName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Lora',
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: cardText.title,
                     ),
                   ),
                 ),
@@ -416,15 +423,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.16),
+                    color: cardText.pillBg,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
                     '${profile.core.warm ? 'Warm' : 'Cool'} · $chroma',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: cardText.pillText,
                     ),
                   ),
                 ),
@@ -433,20 +440,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Text(
+                Text(
                   'View My Colors',
                   style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: cardText.title,
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(
-                  Icons.arrow_forward,
-                  size: 14,
-                  color: Colors.white.withOpacity(0.9),
-                ),
+                Icon(Icons.arrow_forward, size: 16, color: cardText.title),
               ],
             ),
           ],
