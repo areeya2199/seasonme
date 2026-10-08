@@ -131,6 +131,7 @@ class FacePhotoGuideDialog extends StatelessWidget {
                                 tip['subtitle']!,
                                 style: const TextStyle(
                                   fontSize: 12,
+                                  fontWeight: FontWeight.w800,
                                   color: AppColors.mid,
                                 ),
                               ),
@@ -150,8 +151,8 @@ class FacePhotoGuideDialog extends StatelessWidget {
                       'Got It',
                       style: TextStyle(
                         color: AppColors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),

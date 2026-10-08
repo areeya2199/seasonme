@@ -261,7 +261,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
                 'Outfit Checker',
                 style: TextStyle(
                   fontSize: 24,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.charcoal,
                 ),
               ),
@@ -275,7 +275,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
                       text: _profile.displayName,
                       style: const TextStyle(
                         color: AppColors.gold,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -299,15 +299,15 @@ class _ClothingScreenState extends State<ClothingScreen> {
                             Text(
                               'Upload clothing photo',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
                             ),
                             SizedBox(height: 2),
                             Text(
                               'Tap to take a photo or choose from gallery',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: AppColors.mid,
                               ),
                             ),
@@ -366,8 +366,12 @@ class _ClothingScreenState extends State<ClothingScreen> {
 
   Widget _buildIdleHint() {
     return Text(
-      'ถ่ายหรืออัปโหลดรูปเสื้อผ้า แล้วแอปจะตรวจสีให้อัตโนมัติว่าเข้ากับซีซั่น ${_profile.displayName} ของคุณแค่ไหน',
-      style: const TextStyle(fontSize: 12, color: AppColors.mid),
+      'Take or upload a photo of your outfit and the app will automatically check how well its colors match your ${_profile.displayName} season',
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        color: AppColors.mid,
+      ),
     );
   }
 
@@ -439,7 +443,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'This photo has a lot of texture or a strong green tone — it might be a plant, animal or scenery shot rather than plain fabric. For a reliable check, photograph a flat, evenly-lit piece of clothing.',
+              'This photo has a lot of texture or a strong green tone, it might be a plant, animal or scenery shot rather than plain fabric. For a reliable check, photograph a flat, evenly-lit piece of clothing.',
               style: TextStyle(fontSize: 12, color: const Color(0xFF6B4E12)),
             ),
           ),
@@ -505,9 +509,10 @@ class _ClothingScreenState extends State<ClothingScreen> {
                       ),
                     ),
                     Text(
-                      'ใกล้เคียง ${result.closest.name} มากที่สุด',
+                      'Closest to ${result.closest.name}',
                       style: const TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.mid,
                       ),
                     ),
@@ -601,21 +606,21 @@ class _ClothingScreenState extends State<ClothingScreen> {
     switch (level) {
       case MatchLevel.excellent:
         return _LevelInfo(
-          'เข้ากับซีซั่นมาก',
+          'Excellent Match',
           const Color(0xFF3E9C6D),
-          'สีนี้อยู่ในโทนของ ${_profile.displayName} พอดี ใส่ได้อย่างมั่นใจ',
+          'This color is a perfect match for your ${_profile.displayName} season.',
         );
       case MatchLevel.good:
         return _LevelInfo(
-          'พอใช้ได้',
+          'Good Match',
           const Color(0xFFD9A441),
-          'สีนี้ใกล้เคียงกับโทน ${_profile.displayName} อยู่บ้าง ลองจับคู่กับชิ้นที่เป็นกลางเพิ่มเติม',
+          'This color is somewhat similar to your ${_profile.displayName} season. Try pairing it with more neutral pieces.',
         );
       case MatchLevel.poor:
         return _LevelInfo(
-          'ควรเลี่ยง',
+          'Avoid',
           const Color(0xFFC65B5B),
-          'สีนี้ค่อนข้างห่างจากโทนของ ${_profile.displayName} ลองถ่ายชิ้นอื่นเทียบดูอีกครั้ง',
+          'This color is quite different from your ${_profile.displayName} season. Try taking another photo of a different piece.',
         );
     }
   }
