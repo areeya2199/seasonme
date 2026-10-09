@@ -136,15 +136,15 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   const Text(
                     'Color Quiz',
                     style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.gold,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppColors.charcoal,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const Spacer(),
                   Text(
                     '${_step + 1}/${_questions.length}',
-                    style: const TextStyle(fontSize: 13, color: AppColors.mid),
+                    style: const TextStyle(fontSize: 14, color: AppColors.mid),
                   ),
                 ],
               ),
@@ -172,7 +172,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
               const SizedBox(height: 8),
               Text(
                 q.subtitle,
-                style: const TextStyle(fontSize: 13, color: AppColors.mid),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                  color: AppColors.mid,
+                ),
               ),
               const SizedBox(height: 28),
 
@@ -274,8 +278,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                     _step == _questions.length - 1 ? 'Finish' : 'Continue',
                     style: const TextStyle(
                       color: AppColors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -296,8 +300,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                     'Skip',
                     style: TextStyle(
                       color: AppColors.charcoal,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -308,7 +312,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                 child: Text(
                   'Skipping won\'t break the analysis it just makes the result a bit less precise.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11, color: AppColors.mid),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                    color: AppColors.mid,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),

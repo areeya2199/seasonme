@@ -94,7 +94,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Sign in to continue your personal\ncolor journey.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
                   fontFamily: 'Nunito',
                   color: AppColors.charcoal,
                   height: 1.4,
@@ -144,7 +145,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const Spacer(flex: 2),
               Text.rich(
                 TextSpan(
-                  style: const TextStyle(fontSize: 11.5, color: AppColors.mid),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.mid,
+                  ),
                   children: [const TextSpan(text: "camera access needed")],
                 ),
               ),

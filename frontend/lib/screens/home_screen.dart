@@ -10,13 +10,7 @@ import 'result_screen.dart';
 import 'profile_screen.dart';
 import 'clothing_screen.dart';
 import 'photoguide.dart';
-
-// Warm brown gradient reused by the "personal color" card here and on the
-// Result screen, so the two match.
-const List<Color> _personalColorGradient = [
-  Color(0xFF6B4E36),
-  Color(0xFF8A6A47),
-];
+import '../theme/season_card_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -88,6 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
             context,
             MaterialPageRoute(builder: (_) => const ProfileScreen()),
           ),
+          // profile photo
           child: CircleAvatar(
             radius: 20,
             backgroundColor: const Color(0xffecd5f1),
@@ -115,6 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildReturningUser(BuildContext context) {
     final latest = _history.first;
     final profile = SeasonPaletteData.getProfile(latest.season);
+    // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
+    final cardText = seasonCardText(latest.season);
     final chroma = ColorUtils.chromaLabel(
       profile.topsPool.map((s) => s.color).toList(),
     );
@@ -137,15 +134,15 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               'WELCOME BACK, ${_firstName()}',
               style: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 12,
                 letterSpacing: 1.4,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 color: AppColors.blush,
               ),
             ),
             const SizedBox(height: 6),
             const Text(
-              'A little color,\na little more you.',
+              'Your little color story\nbegins here.',
               style: TextStyle(
                 fontFamily: 'Lora',
                 fontSize: 26,
@@ -161,10 +158,10 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: _personalColorGradient,
+                  colors: seasonCardGradient(latest.season),
                 ),
                 borderRadius: BorderRadius.circular(26),
               ),
@@ -172,22 +169,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'YOUR PERSONAL COLOR',
+                    'YOUR PERSONAL PALETTE IS',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
                       letterSpacing: 1.4,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white.withOpacity(0.75),
+                      fontWeight: FontWeight.normal,
+                      color: cardText.label,
                     ),
                   ),
                   const SizedBox(height: 4),
+                  // season name
                   Text(
                     profile.displayName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Lora',
                       fontSize: 32,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: cardText.title,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -198,9 +196,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ' undertone',
                           ' undertone',
                         ),
+                        cardText,
                       ),
                       const SizedBox(width: 8),
-                      _pillTag(chroma),
+                      _pillTag(chroma, cardText),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -216,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: c.color,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: Colors.white24,
+                                  color: cardText.swatchBorder,
                                   width: 1.2,
                                 ),
                               ),
@@ -230,8 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF6B4E36),
+                        backgroundColor: cardText.buttonBg,
+                        foregroundColor: cardText.buttonText,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -247,12 +246,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      icon: const Icon(Icons.arrow_forward, size: 16),
-                      label: const Text(
+                      icon: const Icon(Icons.arrow_forward, size: 18),
+                      label: Text(
                         'View My Result',
                         style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: cardText.buttonText,
                         ),
                       ),
                     ),
@@ -268,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF2F3A2E),
+                color: const Color(0xff810955),
                 borderRadius: BorderRadius.circular(26),
               ),
               child: Column(
@@ -279,16 +279,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Icon(
                         Icons.checkroom_outlined,
                         size: 16,
-                        color: Color(0xFFBFD6B6),
+                        color: Color(0xffee81b3),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         'STYLE IN HARMONY',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 12,
                           letterSpacing: 1.4,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFBFD6B6).withOpacity(0.9),
+                          fontWeight: FontWeight.normal,
+                          color: const Color(0xffee81b3).withOpacity(0.9),
                         ),
                       ),
                     ],
@@ -306,7 +306,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 6),
                   const Text(
                     'Find out how your outfit fits your season.',
-                    style: TextStyle(fontSize: 12.5, color: Color(0xFFD7E3D2)),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xffee81b3),
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
@@ -314,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
+                        side: const BorderSide(color: Color(0xff810955)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -326,12 +330,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           builder: (_) => ClothingScreen(season: latest.season),
                         ),
                       ),
-                      icon: const Icon(Icons.arrow_forward, size: 16),
+                      icon: const Icon(Icons.arrow_forward, size: 18),
                       label: const Text(
                         'Check Your Outfit',
                         style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -380,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ---- prominent "Start New Analysis" button ----
+            //Start New Analysis button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -394,10 +399,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 onPressed: _startAnalysis,
-                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                icon: const Icon(Icons.auto_awesome_outlined, size: 19),
                 label: const Text(
                   'Start New Analysis',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ),
@@ -407,19 +412,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _pillTag(String text) {
+  Widget _pillTag(String text, SeasonCardText cardText) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
+        color: cardText.pillBg,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: Colors.white,
+          color: cardText.pillText,
         ),
       ),
     );
@@ -442,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _formatDate(DateTime dt) =>
       '${_monthAbbr[dt.month - 1]} ${dt.day.toString().padLeft(2, '0')}, ${dt.year}';
 
-  // ---------------- new user (Image 2) ----------------
+  //new user
 
   Widget _buildNewUser(BuildContext context) {
     return GradientScaffold(
@@ -456,15 +461,15 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               'WELCOME, ${_firstName()}',
               style: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 12,
                 letterSpacing: 1.4,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 color: AppColors.blush,
               ),
             ),
             const SizedBox(height: 6),
             const Text(
-              'Find your\nbeautiful colors.',
+              'Find your colors,\nFind your style.',
               style: TextStyle(
                 fontFamily: 'Lora',
                 fontSize: 28,
@@ -482,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.charcoal.withOpacity(0.05),
+                    color: AppColors.charcoal.withOpacity(0.08),
                     blurRadius: 18,
                     offset: const Offset(0, 8),
                   ),
@@ -493,7 +498,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const _ColorFanIcon(),
                   const SizedBox(height: 28),
                   const Text(
-                    'Your season\nstarts here.',
+                    'Meet you perfect\ncolors palette',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Lora',
@@ -505,10 +510,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'A photo and a few questions.\nA palette made for you.',
+                    'Just a photo and a few quick questions.\nTap below to get started.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
                       color: AppColors.mid,
                       height: 1.4,
                     ),
@@ -525,19 +531,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           172,
                           187,
                         ),
-                        foregroundColor: const Color(0xFF4C3935),
+                        foregroundColor: AppColors.charcoal,
                         elevation: 1,
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      icon: const Icon(Icons.auto_awesome_outlined, size: 16),
+                      icon: const Icon(Icons.auto_awesome_outlined, size: 19),
                       label: const Text(
                         'Begin Analysis',
                         style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
                     ),

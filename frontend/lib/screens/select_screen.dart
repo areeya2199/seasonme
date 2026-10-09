@@ -34,7 +34,7 @@ class SelectScreen extends StatelessWidget {
               'How would you like\nto add your photo?',
               style: TextStyle(
                 fontSize: 26,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppColors.charcoal,
                 height: 1.3,
               ),
@@ -42,7 +42,12 @@ class SelectScreen extends StatelessWidget {
             const SizedBox(height: 10),
             const Text(
               "We'll analyze your skin, hair and eye tones to find your season.",
-              style: TextStyle(fontSize: 13, color: AppColors.mid, height: 1.5),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: AppColors.mid,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 32),
 
@@ -75,8 +80,8 @@ class SelectScreen extends StatelessWidget {
             const Text(
               'For best results',
               style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                fontSize: 15,
                 color: AppColors.charcoal,
               ),
             ),
@@ -131,15 +136,15 @@ class _OptionCard extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
                     color: AppColors.charcoal,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(fontSize: 12, color: AppColors.mid),
+                  style: const TextStyle(fontSize: 14, color: AppColors.mid),
                 ),
               ],
             ),
@@ -165,7 +170,11 @@ class _TipRow extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             text,
-            style: const TextStyle(fontSize: 13, color: AppColors.charcoal),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.normal,
+              color: AppColors.charcoal,
+            ),
           ),
         ],
       ),

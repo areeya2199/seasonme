@@ -10,12 +10,7 @@ import '../services/analysis_history.dart';
 import '../theme/app_theme.dart';
 import 'clothing_screen.dart';
 import 'select_screen.dart';
-
-// Same warm brown gradient used on the Home screen's "personal color" card.
-const List<Color> _personalColorGradient = [
-  Color(0xFF6B4E36),
-  Color(0xFF8A6A47),
-];
+import '../theme/season_card_colors.dart';
 
 class ResultScreen extends StatefulWidget {
   final SeasonKey season;
@@ -317,8 +312,8 @@ class _ResultScreenState extends State<ResultScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE6DFFA),
-                  foregroundColor: const Color(0xFF5B3E9C),
+                  backgroundColor: const Color(0xffee81b3),
+                  foregroundColor: const Color(0xff810955),
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -331,10 +326,10 @@ class _ResultScreenState extends State<ResultScreen> {
                     builder: (_) => ClothingScreen(season: widget.season),
                   ),
                 ),
-                icon: const Icon(Icons.arrow_forward, size: 17),
+                icon: const Icon(Icons.arrow_forward, size: 18),
                 label: const Text(
                   'Check an Outfit',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                 ),
               ),
             ),
@@ -349,7 +344,8 @@ class _ResultScreenState extends State<ResultScreen> {
                   'Analyze Again',
                   style: TextStyle(
                     color: AppColors.mid,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
                   ),
                 ),
               ),
@@ -370,7 +366,7 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         const Expanded(
           child: Text(
-            'My Colors',
+            'My Palette',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Lora',
@@ -380,7 +376,6 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
           ),
         ),
-        _circleIconButton(Icons.tune, small: true, onTap: _showOccasionPicker),
       ],
     );
   }
@@ -404,14 +399,16 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _buildPersonalColorCard(String chroma) {
+    // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
+    final cardText = seasonCardText(widget.season);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: _personalColorGradient,
+          colors: seasonCardGradient(widget.season),
         ),
         borderRadius: BorderRadius.circular(26),
       ),
@@ -419,36 +416,36 @@ class _ResultScreenState extends State<ResultScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'YOUR PERSONAL COLOR',
+            'YOUR SEASON IS',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               letterSpacing: 1.4,
-              fontWeight: FontWeight.w700,
-              color: Colors.white.withOpacity(0.75),
+              fontWeight: FontWeight.normal,
+              color: cardText.label,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             _profile.displayName,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Lora',
               fontSize: 34,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: cardText.title,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             _profile.description,
-            style: const TextStyle(fontSize: 12.5, color: Color(0xFFEADFD0)),
+            style: TextStyle(fontSize: 12.5, color: cardText.body),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _pillTag(_profile.core.warm ? 'Warm' : 'Cool'),
+              _pillTag(_profile.core.warm ? 'Warm' : 'Cool', cardText),
               const SizedBox(width: 8),
-              _pillTag(chroma),
+              _pillTag(chroma, cardText),
             ],
           ),
         ],
@@ -509,19 +506,19 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _pillTag(String text) {
+  Widget _pillTag(String text, SeasonCardText cardText) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
+        color: cardText.pillBg,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: Colors.white,
+          color: cardText.pillText,
         ),
       ),
     );
@@ -566,14 +563,14 @@ class _ResultScreenState extends State<ResultScreen> {
     return Row(
       children: [
         chip(
-          'Day',
+          'Day Event',
           Icons.wb_sunny_outlined,
           !_nightMode,
           () => _setNightMode(false),
         ),
         const SizedBox(width: 10),
         chip(
-          'Night Mode',
+          'Night Event',
           Icons.nightlight_round,
           _nightMode,
           () => _setNightMode(true),
@@ -671,7 +668,7 @@ class _ResultScreenState extends State<ResultScreen> {
               const SizedBox(height: 2),
               Text(
                 _dayNightBlurb(),
-                style: const TextStyle(fontSize: 11.5, color: AppColors.mid),
+                style: const TextStyle(fontSize: 12, color: AppColors.mid),
               ),
               const SizedBox(height: 10),
               _compactSwatchWrap(
@@ -684,7 +681,7 @@ class _ResultScreenState extends State<ResultScreen> {
               const SizedBox(height: 2),
               Text(
                 _dayNightBlurb(),
-                style: const TextStyle(fontSize: 11.5, color: AppColors.mid),
+                style: const TextStyle(fontSize: 12, color: AppColors.mid),
               ),
               const SizedBox(height: 10),
               _compactSwatchWrap(
@@ -708,7 +705,7 @@ class _ResultScreenState extends State<ResultScreen> {
           title,
           style: const TextStyle(
             fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: AppColors.charcoal,
           ),
         ),
@@ -786,8 +783,8 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: Text(
                   _beautyChipLabel(c),
                   style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
                     color: active ? Colors.white : AppColors.mid,
                   ),
                 ),
@@ -800,14 +797,14 @@ class _ResultScreenState extends State<ResultScreen> {
           _beautySectionTitle(_beautyCategory),
           style: const TextStyle(
             fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: AppColors.charcoal,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           _dayNightBlurb(),
-          style: const TextStyle(fontSize: 11.5, color: AppColors.mid),
+          style: const TextStyle(fontSize: 12, color: AppColors.mid),
         ),
         const SizedBox(height: 14),
         Wrap(
@@ -891,8 +888,9 @@ class _OccasionSheet extends StatelessWidget {
                   child: Text(
                     'Choose Occasion',
                     style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+
                       color: AppColors.charcoal,
                     ),
                   ),
@@ -943,7 +941,7 @@ class _MannequinCard extends StatelessWidget {
             height: 30,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: Color(0xFFE8C9A0),
+              color: Color(0xffffdbb5),
             ),
           ),
           const SizedBox(height: 4),

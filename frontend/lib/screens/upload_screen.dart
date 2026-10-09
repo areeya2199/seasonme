@@ -274,7 +274,11 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
             const Text(
               'Use a recent, well-lit photo with your face centered',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.mid),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: AppColors.mid,
+              ),
             ),
             const Spacer(),
             SizedBox(
@@ -303,7 +307,14 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _ready ? () => _continue() : null,
-                child: const Text('Continue'),
+                child: const Text(
+                  'Continue',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.white,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),
