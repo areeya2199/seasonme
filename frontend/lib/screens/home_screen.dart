@@ -243,6 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           builder: (_) => ResultScreen(
                             season: latest.season,
                             recordToHistory: false,
+                            localImageKey: latest.localImageKey,
                           ),
                         ),
                       ),
@@ -354,6 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => ResultScreen(
                     season: latest.season,
                     recordToHistory: false,
+                    localImageKey: latest.localImageKey,
                   ),
                 ),
               ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -17,11 +18,9 @@ class ResultScreen extends StatefulWidget {
   final bool recordToHistory;
   final Map<String, dynamic>? analysis;
   final Map<String, String?>? questionnaireAnswers;
-  // The photo the user just took/uploaded for this analysis. Only set right
-  // after processing — revisiting a past result from Home/Profile/History
-  // has no photo on hand, so this stays null there and the photo block
-  // simply doesn't render.
+  // Local photo used immediately after processing; history uses localImageKey.
   final String? imagePath;
+  final String? localImageKey;
 
   const ResultScreen({
     super.key,
@@ -30,6 +29,7 @@ class ResultScreen extends StatefulWidget {
     this.analysis,
     this.questionnaireAnswers,
     this.imagePath,
+    this.localImageKey,
   });
 
   @override
@@ -63,18 +63,39 @@ class _ResultScreenState extends State<ResultScreen> {
   late List<SwatchItem> _blush;
   late List<SwatchItem> _lipstick;
   late List<SwatchItem> _jewelry;
+  Uint8List? _historyPhoto;
+  Future<void>? _historySave;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     if (widget.recordToHistory && widget.analysis != null) {
-      AnalysisHistoryService.addEntry(
-        season: widget.season,
-        analysis: widget.analysis!,
-        questionnaireAnswers: widget.questionnaireAnswers ?? const {},
-      );
+      _historySave =
+          AnalysisHistoryService.addEntry(
+            season: widget.season,
+            analysis: widget.analysis!,
+            questionnaireAnswers: widget.questionnaireAnswers ?? const {},
+            imagePath: widget.imagePath,
+          ).catchError((Object error) {
+            debugPrint('Analysis history save failed: $error');
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not save analysis history.')),
+            );
+          });
     }
+    if (widget.imagePath == null && widget.localImageKey != null) {
+      _loadHistoryPhoto();
+    }
+  }
+
+  Future<void> _loadHistoryPhoto() async {
+    final key = widget.localImageKey;
+    if (key == null) return;
+    final bytes = await AnalysisHistoryService.loadPhoto(key);
+    if (!mounted || bytes == null) return;
+    setState(() => _historyPhoto = bytes);
   }
 
   void _loadProfile() {
@@ -293,10 +314,6 @@ class _ResultScreenState extends State<ResultScreen> {
             _buildTopBar(),
             const SizedBox(height: 16),
             _buildPersonalColorCard(chroma),
-            if (widget.imagePath != null) ...[
-              const SizedBox(height: 16),
-              _buildUserPhoto(),
-            ],
             const SizedBox(height: 16),
             _buildDayNightToggle(),
             const SizedBox(height: 12),
@@ -362,7 +379,11 @@ class _ResultScreenState extends State<ResultScreen> {
       children: [
         _circleIconButton(
           Icons.chevron_left,
-          onTap: () => Navigator.popUntil(context, (r) => r.isFirst),
+          onTap: () async {
+            await _historySave;
+            if (!mounted) return;
+            Navigator.popUntil(context, (r) => r.isFirst);
+          },
         ),
         const Expanded(
           child: Text(
@@ -399,8 +420,7 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _buildPersonalColorCard(String chroma) {
-    // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
-    final cardText = seasonCardText(widget.season);
+    final details = _buildPersonalColorDetails(chroma);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -412,44 +432,77 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         borderRadius: BorderRadius.circular(26),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'YOUR SEASON IS',
-            style: TextStyle(
-              fontSize: 12,
-              letterSpacing: 1.4,
-              fontWeight: FontWeight.normal,
-              color: cardText.label,
+      child: widget.imagePath == null && _historyPhoto == null
+          ? details
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final stackPhoto =
+                    constraints.maxWidth < 270 ||
+                    MediaQuery.textScalerOf(context).scale(14) > 16.8;
+                if (stackPhoto) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildUserPhoto(),
+                      const SizedBox(height: 20),
+                      details,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildUserPhoto(),
+                    const SizedBox(width: 16),
+                    Expanded(child: details),
+                  ],
+                );
+              },
             ),
+    );
+  }
+
+  Widget _buildPersonalColorDetails(String chroma) {
+    // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
+    final cardText = seasonCardText(widget.season);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'YOUR SEASON IS',
+          style: TextStyle(
+            fontSize: 12,
+            letterSpacing: 1.4,
+            fontWeight: FontWeight.normal,
+            color: cardText.label,
           ),
-          const SizedBox(height: 4),
-          Text(
-            _profile.displayName,
-            style: TextStyle(
-              fontFamily: 'Lora',
-              fontSize: 34,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w700,
-              color: cardText.title,
-            ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _profile.displayName,
+          style: TextStyle(
+            fontFamily: 'Lora',
+            fontSize: 34,
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w700,
+            color: cardText.title,
           ),
-          const SizedBox(height: 6),
-          Text(
-            _profile.description,
-            style: TextStyle(fontSize: 12.5, color: cardText.body),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _pillTag(_profile.core.warm ? 'Warm' : 'Cool', cardText),
-              const SizedBox(width: 8),
-              _pillTag(chroma, cardText),
-            ],
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _profile.description,
+          style: TextStyle(fontSize: 12.5, color: cardText.body),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _pillTag(_profile.core.warm ? 'Warm' : 'Cool', cardText),
+            _pillTag(chroma, cardText),
+          ],
+        ),
+      ],
     );
   }
 
@@ -457,11 +510,13 @@ class _ResultScreenState extends State<ResultScreen> {
   // always fills this exact frame regardless of the source photo's own
   // dimensions or orientation (portrait, landscape, square all look the
   // same size here; excess is cropped rather than the frame resizing).
-  static const double _photoWidth = 200;
-  static const double _photoHeight = 240;
+  static const double _photoWidth = 110;
+  static const double _photoHeight = 140;
 
   Widget _buildUserPhoto() {
-    final path = widget.imagePath!;
+    final path = widget.imagePath;
+    final bytes = _historyPhoto;
+    if (path == null && bytes == null) return const SizedBox.shrink();
     final fallback = Container(
       color: AppColors.cream,
       alignment: Alignment.center,
@@ -472,7 +527,15 @@ class _ResultScreenState extends State<ResultScreen> {
     );
     // On Flutter web the picked "path" is a blob URL and Image.file is not
     // supported, so use Image.network there.
-    final image = kIsWeb
+    final image = path == null
+        ? Image.memory(
+            bytes!,
+            width: _photoWidth,
+            height: _photoHeight,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback,
+          )
+        : kIsWeb
         ? Image.network(
             path,
             width: _photoWidth,

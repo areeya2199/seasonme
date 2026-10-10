@@ -98,7 +98,8 @@ def _select_season(undertone, preference, L_star, chroma):
         if L_star > 66 and chroma >= 45:
             return "Spring"
         return "Autumn"
-
+    
+    #cool undertone
     if preference == "Soft & muted":
         return "Summer"
     if preference == "Deep & rich":
