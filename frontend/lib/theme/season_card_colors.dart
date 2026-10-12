@@ -8,7 +8,7 @@ List<Color> seasonCardGradient(SeasonKey season) {
     case SeasonKey.Spring:
       return const [Color(0xff5d8736), Color(0xff809d3c)];
     case SeasonKey.Summer:
-      return const [Color(0xffbb596b), Color(0xfff96d80)];
+      return const [Color(0xffa87676), Color(0xffca8787)];
     case SeasonKey.Autumn:
       return const [Color(0xff6b240c), Color(0xff994d1c)];
     case SeasonKey.Winter:
@@ -64,52 +64,52 @@ SeasonCardText seasonCardText(SeasonKey season) {
     // พื้นหลังเขียวเข้ม -> ตัวหนังสือขาว
     case SeasonKey.Spring:
       return SeasonCardText(
-        label: const Color(0xffffffff).withOpacity(0.85),
+        label: const Color(0xffffffff).withOpacity(0.95),
         title: const Color(0xffffffff),
         body: const Color(0xffffffff),
         pillText: const Color(0xffffffff),
         pillBg: const Color(0xffffffff).withOpacity(0.18),
         buttonBg: const Color(0xffffffff),
-        buttonText: const Color(0xff5d8736),
+        buttonText: AppColors.charcoal,
         swatchBorder: const Color(0xffffffff),
       );
 
     // พื้นหลังเขียวมิ้นต์อ่อน -> ตัวหนังสือเขียวเข้ม
     case SeasonKey.Summer:
       return SeasonCardText(
-        label: const Color(0xffffffff).withOpacity(0.85),
+        label: const Color(0xffffffff).withOpacity(0.95),
         title: const Color(0xffffffff),
         body: const Color(0xffffffff),
         pillText: const Color(0xffffffff),
         pillBg: const Color(0xffffffff).withOpacity(0.18),
         buttonBg: const Color(0xffffffff),
-        buttonText: const Color(0xffbb596b),
+        buttonText: AppColors.charcoal,
         swatchBorder: const Color(0xffffffff),
       );
 
     // พื้นหลังน้ำตาลแดงเข้ม -> ตัวหนังสือครีมทอง
     case SeasonKey.Autumn:
       return SeasonCardText(
-        label: const Color(0xffffffff).withOpacity(0.85),
+        label: const Color(0xffffffff).withOpacity(0.95),
         title: const Color(0xffffffff),
         body: const Color(0xffffffff),
         pillText: const Color(0xffffffff),
         pillBg: const Color(0xffffffff).withOpacity(0.18),
         buttonBg: const Color(0xffffffff),
-        buttonText: const Color(0xff6b240c),
+        buttonText: AppColors.charcoal,
         swatchBorder: const Color(0xffffffff),
       );
 
     // พื้นหลังฟ้าอ่อน/ขาว -> ตัวหนังสือกรมท่า
     case SeasonKey.Winter:
       return SeasonCardText(
-        label: AppColors.charcoal.withOpacity(0.85),
+        label: AppColors.charcoal.withOpacity(0.95),
         title: AppColors.charcoal,
         body: AppColors.charcoal,
         pillText: AppColors.charcoal,
-        pillBg: AppColors.charcoal.withOpacity(0.18),
-        buttonBg: AppColors.charcoal,
-        buttonText: const Color(0xffffffff),
+       pillBg: const Color(0xffffffff).withOpacity(0.18),
+        buttonBg: const Color(0xffffffff),
+        buttonText: AppColors.charcoal,
         swatchBorder: const Color(0xffffffff),
       );
   }

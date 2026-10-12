@@ -7,11 +7,13 @@ import 'package:flutter/material.dart';
 import '../data/season_palette.dart';
 import '../data/occasion_palette.dart';
 import '../utils/color_utils.dart';
+import '../utils/undertone_utils.dart';
 import '../services/analysis_history.dart';
 import '../theme/app_theme.dart';
 import 'clothing_screen.dart';
 import 'select_screen.dart';
 import '../theme/season_card_colors.dart';
+import 'wardrobe_preview.dart';
 
 class ResultScreen extends StatefulWidget {
   final SeasonKey season;
@@ -329,8 +331,8 @@ class _ResultScreenState extends State<ResultScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xffee81b3),
-                  foregroundColor: const Color(0xff810955),
+                  backgroundColor: const Color(0xfff4cce9),
+                  foregroundColor: AppColors.charcoal,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -471,7 +473,7 @@ class _ResultScreenState extends State<ResultScreen> {
         Text(
           'YOUR SEASON IS',
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             letterSpacing: 1.4,
             fontWeight: FontWeight.normal,
             color: cardText.label,
@@ -484,25 +486,32 @@ class _ResultScreenState extends State<ResultScreen> {
             fontFamily: 'Lora',
             fontSize: 34,
             fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: cardText.title,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           _profile.description,
-          style: TextStyle(fontSize: 12.5, color: cardText.body),
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.normal,
+              color: cardText.body,
+            ),
         ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            _pillTag(_profile.core.warm ? 'Warm' : 'Cool', cardText),
+            _pillTag(
+              UndertoneUtils.label(widget.analysis, withSuffix: true),
+              cardText,
+            ),
             _pillTag(chroma, cardText),
           ],
         ),
-      ],
+      ], 
     );
   }
 
@@ -718,7 +727,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
   // ---------------- Wardrobe: Tops + Bottoms + live mannequin ----------------
 
-  Widget _buildWardrobeTab() {
+ Widget _buildWardrobeTab() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -756,7 +765,7 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
         ),
         const SizedBox(width: 14),
-        _MannequinCard(shirtColor: _shirtColor, pantsColor: _pantsColor),
+        MannequinCard(shirtColor: _shirtColor, pantsColor: _pantsColor),
       ],
     );
   }
@@ -819,6 +828,7 @@ class _ResultScreenState extends State<ResultScreen> {
       }).toList(),
     );
   }
+
 
   // ---------------- Beauty & Jewelry ----------------
 
@@ -973,80 +983,7 @@ class _OccasionSheet extends StatelessWidget {
   }
 }
 
-// Simple, functional torso+legs figure. Grey until a top / bottom is chosen.
-class _MannequinCard extends StatelessWidget {
-  final Color? shirtColor;
-  final Color? pantsColor;
-  const _MannequinCard({this.shirtColor, this.pantsColor});
 
-  @override
-  Widget build(BuildContext context) {
-    final shirt = shirtColor ?? AppColors.mid.withOpacity(0.18);
-    final pants = pantsColor ?? AppColors.charcoal.withOpacity(0.16);
-    return Container(
-      width: 108,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.charcoal.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xffffdbb5),
-            ),
-          ),
-          const SizedBox(height: 4),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            width: 78,
-            height: 60,
-            decoration: BoxDecoration(
-              color: shirt,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-                bottom: Radius.circular(8),
-              ),
-            ),
-          ),
-          const SizedBox(height: 3),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            width: 58,
-            height: 66,
-            decoration: BoxDecoration(
-              color: pants,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(6),
-                bottom: Radius.circular(12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Preview',
-            style: TextStyle(
-              fontSize: 10.5,
-              color: AppColors.mid,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _SwatchTile extends StatelessWidget {
   final SwatchItem item;

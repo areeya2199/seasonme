@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show WriteBuffer;
@@ -33,8 +35,14 @@ class CameraScreen extends StatefulWidget {
 
 class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
+  // Keep the existing guidance available without running ML Kit in basic mode.
+  static const bool _basicCameraMode = bool.fromEnvironment(
+    'BASIC_CAMERA_MODE',
+    defaultValue: false,
+  );
   CameraController? _controller;
   FaceDetector? _faceDetector;
+  ModalRoute<dynamic>? _cameraRoute;
   List<CameraDescription> _cameras = [];
   int _cameraIndex = 0;
 
@@ -42,7 +50,102 @@ class _CameraScreenState extends State<CameraScreen>
   bool _capturing = false;
   bool _permissionDenied = false;
   bool _torchOn = false;
+  bool _cameraBusy = false;
+  bool _foreground = true;
+  bool _routeAway = false;
+  bool _disposed = false;
+  int _generation = 0;
+  String? _cameraError;
+  // CameraX resources are shared even across consecutive CameraScreen routes.
+  static Future<void> _operations = Future<void>.value();
+  Future<void>? _detectionTask;
   _Guidance _guidance = _Guidance.initializing;
+
+  bool get _canUseCamera =>
+      mounted &&
+      !_disposed &&
+      _foreground &&
+      !_routeAway &&
+      (_cameraRoute?.isCurrent ?? true);
+
+  bool get _cameraReady =>
+      _canUseCamera &&
+      !_cameraBusy &&
+      _cameraError == null &&
+      _controller != null &&
+      _controller!.value.isInitialized &&
+      !_controller!.value.isTakingPicture;
+
+  bool get _canCapture =>
+      !_capturing &&
+      (kUiPreviewMode
+          ? _guidance == _Guidance.ready
+          : _cameraReady && (_basicCameraMode || _guidance == _Guidance.ready));
+
+  // Every hardware operation, including lifecycle cleanup, uses this queue.
+  // Recover the queue after errors while returning the error to its caller.
+  Future<void> _serialize(Future<void> Function() operation) {
+    final next = _operations.then((_) => operation());
+    _operations = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return next;
+  }
+
+  void _reportCameraError(String step, Object error, StackTrace stack) {
+    final detail = error is CameraException
+        ? '${error.code}: ${error.description}'
+        : error.toString();
+    debugPrint('[SeasonMe camera] $step failed: $detail\n$stack');
+    if (!mounted || _disposed) return;
+    setState(() {
+      _permissionDenied =
+          error is CameraException && error.code == 'CameraAccessDenied';
+      _cameraError = '$step failed: $detail';
+    });
+  }
+
+  void _onControllerChanged() {
+    final value = _controller?.value;
+    if (value == null || !value.hasError || !mounted || _disposed) return;
+    final message = value.errorDescription ?? 'Unknown camera error';
+    if (_cameraError == message) return;
+    debugPrint('[SeasonMe camera] controller error: $message');
+    setState(() => _cameraError = message);
+  }
+
+  Future<void> _releaseCamera() async {
+    final controller = _controller;
+    _controller = null;
+    if (mounted && !_disposed) setState(() => _torchOn = false);
+    if (controller == null) return;
+    controller.removeListener(_onControllerChanged);
+    try {
+      if (controller.value.isInitialized &&
+          controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+      }
+      await _detectionTask;
+    } finally {
+      debugPrint('[SeasonMe camera] dispose ${controller.description.name}');
+      await controller.dispose();
+    }
+  }
+
+  Future<void> _startGuidance(
+    CameraController controller,
+    int generation,
+  ) async {
+    if (_basicCameraMode || !_canUseCamera || generation != _generation) return;
+    if (!controller.value.isStreamingImages) {
+      await controller.startImageStream((image) {
+        if (!_isDetecting) {
+          _detectionTask = _onFrame(image, controller, generation);
+        }
+      });
+    }
+  }
 
   //Face guide oval
   static const double _ovalWidthFraction = 0.55; // width
@@ -57,101 +160,204 @@ class _CameraScreenState extends State<CameraScreen>
       _guidance = _Guidance.noFace;
       return;
     }
-    _faceDetector = FaceDetector(
-      options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
-    );
+    if (!_basicCameraMode) {
+      _faceDetector = FaceDetector(
+        options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
+      );
+    }
     _initCamera();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _cameraRoute = ModalRoute.of(context);
+  }
+
   Future<void> _initCamera({int? preferredIndex}) async {
+    if (kUiPreviewMode || !_canUseCamera) return;
+    final generation = ++_generation;
+    setState(() {
+      _cameraBusy = true;
+      _cameraError = null;
+      _permissionDenied = false;
+      _guidance = _Guidance.initializing;
+    });
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) throw CameraException('noCamera', 'No camera found');
-      _cameras = cameras;
+      await _serialize(() async {
+        if (!_canUseCamera || generation != _generation) return;
+        // CameraX dispose releases shared resources: finish it BEFORE creating
+        // the replacement, or disposing the old camera can unbind the new one.
+        await _releaseCamera();
+        if (!_canUseCamera || generation != _generation) return;
+        final cameras = _cameras.isEmpty ? await availableCameras() : _cameras;
+        if (!_canUseCamera || generation != _generation) return;
+        if (cameras.isEmpty) {
+          throw CameraException('noCamera', 'No camera found');
+        }
+        _cameras = cameras;
 
-      int index = preferredIndex ?? _cameraIndex;
-      if (preferredIndex == null) {
-        final frontIndex = cameras.indexWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
-        );
-        index = frontIndex != -1 ? frontIndex : 0;
-      }
-      index = index.clamp(0, cameras.length - 1);
-
-      final controller = CameraController(
-        cameras[index],
-        ResolutionPreset.medium,
-        enableAudio: false,
-        imageFormatGroup: Platform.isAndroid
-            ? ImageFormatGroup.nv21
-            : ImageFormatGroup.bgra8888,
-      );
-      await controller.initialize();
-      if (!mounted) {
-        controller.dispose();
-        return;
-      }
-      await _controller?.dispose();
-      setState(() {
-        _controller = controller;
+        int index = preferredIndex ?? _cameraIndex;
+        if (preferredIndex == null) {
+          final frontIndex = cameras.indexWhere(
+            (c) => c.lensDirection == CameraLensDirection.front,
+          );
+          index = frontIndex != -1 ? frontIndex : 0;
+        }
+        index = index.clamp(0, cameras.length - 1);
         _cameraIndex = index;
-        _permissionDenied = false;
-        _torchOn = false;
-        _guidance = _Guidance.noFace;
+
+        final controller = CameraController(
+          cameras[index],
+          ResolutionPreset.medium,
+          enableAudio: false,
+          imageFormatGroup: _basicCameraMode
+              ? null
+              : Platform.isAndroid
+              ? ImageFormatGroup.nv21
+              : ImageFormatGroup.bgra8888,
+        );
+        debugPrint(
+          '[SeasonMe camera] initialize ${cameras[index].name} '
+          '${cameras[index].lensDirection.name}, basic=$_basicCameraMode',
+        );
+        try {
+          await controller.initialize();
+          if (!_canUseCamera || generation != _generation) {
+            await controller.dispose();
+            return;
+          }
+          setState(() {
+            _controller = controller;
+            _cameraIndex = index;
+            _permissionDenied = false;
+            _torchOn = false;
+            _guidance = _Guidance.noFace;
+          });
+          controller.addListener(_onControllerChanged);
+          await _startGuidance(controller, generation);
+          debugPrint(
+            '[SeasonMe camera] initialized ${controller.description.name}, '
+            'preview=${controller.value.previewSize}, '
+            'stream=${controller.value.isStreamingImages}',
+          );
+          _onControllerChanged();
+        } catch (_) {
+          if (identical(_controller, controller)) {
+            await _releaseCamera();
+          } else {
+            await controller.dispose();
+          }
+          rethrow;
+        }
       });
-      await controller.startImageStream(_onFrame);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _permissionDenied = true);
+    } catch (error, stack) {
+      if (generation == _generation) {
+        _reportCameraError('Initialize', error, stack);
+      } else {
+        debugPrint(
+          '[SeasonMe camera] superseded initialize failed: $error\n$stack',
+        );
+      }
+    } finally {
+      if (mounted && !_disposed && generation == _generation) {
+        setState(() => _cameraBusy = false);
+      }
     }
   }
 
   Future<void> _flipCamera() async {
-    if (kUiPreviewMode || _cameras.length < 2 || _capturing) return;
-    final next = (_cameraIndex + 1) % _cameras.length;
-    await _controller?.stopImageStream();
+    if (kUiPreviewMode || !_cameraReady || _capturing) return;
+    final direction =
+        _cameras[_cameraIndex].lensDirection == CameraLensDirection.front
+        ? CameraLensDirection.back
+        : CameraLensDirection.front;
+    final next = _cameras.indexWhere(
+      (camera) => camera.lensDirection == direction,
+    );
+    if (next == -1) return;
     await _initCamera(preferredIndex: next);
   }
 
   Future<void> _toggleTorch() async {
     final controller = _controller;
-    if (kUiPreviewMode ||
-        controller == null ||
-        !controller.value.isInitialized) {
+    if (kUiPreviewMode || !_cameraReady || _capturing || controller == null) {
       return;
     }
+    final generation = _generation;
+    setState(() => _cameraBusy = true);
     try {
-      final next = _torchOn ? FlashMode.off : FlashMode.torch;
-      await controller.setFlashMode(next);
-      if (mounted) setState(() => _torchOn = !_torchOn);
-    } catch (_) {}
+      await _serialize(() async {
+        if (!_canUseCamera || generation != _generation) return;
+        final next = _torchOn ? FlashMode.off : FlashMode.torch;
+        await controller.setFlashMode(next);
+        if (_canUseCamera && generation == _generation) {
+          setState(() => _torchOn = !_torchOn);
+        }
+      });
+    } catch (error, stack) {
+      _reportCameraError('Flash', error, stack);
+    } finally {
+      if (mounted && !_disposed && generation == _generation) {
+        setState(() => _cameraBusy = false);
+      }
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
-    _faceDetector?.close();
+    _disposed = true;
+    ++_generation;
+    unawaited(
+      _serialize(() async {
+        try {
+          await _releaseCamera();
+        } finally {
+          await _detectionTask;
+          await _faceDetector?.close();
+        }
+      }).catchError((Object error, StackTrace stack) {
+        debugPrint('[SeasonMe camera] final cleanup failed: $error\n$stack');
+      }),
+    );
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (kUiPreviewMode) return;
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      controller.dispose();
-      _controller = null;
-    } else if (state == AppLifecycleState.resumed) {
-      _initCamera();
+    if (state == AppLifecycleState.resumed) {
+      _foreground = true;
+      if (!_routeAway) _initCamera(preferredIndex: _cameraIndex);
+    } else if (_foreground) {
+      _foreground = false;
+      ++_generation;
+      setState(() => _cameraBusy = true);
+      unawaited(
+        _serialize(_releaseCamera).catchError((Object error, StackTrace stack) {
+          _reportCameraError('Suspend', error, stack);
+        }),
+      );
     }
   }
 
   //Per frame analysis
-  Future<void> _onFrame(CameraImage image) async {
-    if (_isDetecting || _capturing || _faceDetector == null) return;
+  Future<void> _onFrame(
+    CameraImage image,
+    CameraController controller,
+    int generation,
+  ) async {
+    if (_basicCameraMode ||
+        !_canUseCamera ||
+        _cameraBusy ||
+        generation != _generation ||
+        !identical(controller, _controller) ||
+        _isDetecting ||
+        _capturing ||
+        _faceDetector == null) {
+      return;
+    }
     _isDetecting = true;
     try {
       final brightness = _estimateBrightness(image);
@@ -162,13 +368,13 @@ class _CameraScreenState extends State<CameraScreen>
         lightIssue = _Guidance.tooBright;
       }
 
-      final inputImage = _toInputImage(image);
+      final inputImage = _toInputImage(image, controller);
       _Guidance next;
       if (inputImage == null) {
         next = lightIssue ?? _Guidance.noFace;
       } else {
         final faces = await _faceDetector!.processImage(inputImage);
-        print("Faces detected: ${faces.length}");
+        debugPrint('[SeasonMe camera] faces detected: ${faces.length}');
         if (lightIssue != null) {
           next = lightIssue;
         } else if (faces.isEmpty) {
@@ -178,11 +384,14 @@ class _CameraScreenState extends State<CameraScreen>
         }
       }
 
-      if (mounted && next != _guidance) {
+      if (_canUseCamera &&
+          generation == _generation &&
+          identical(controller, _controller) &&
+          next != _guidance) {
         setState(() => _guidance = next);
       }
-    } catch (_) {
-      // A single bad/partial frame shouldn't crash the live stream.
+    } catch (error, stack) {
+      debugPrint('[SeasonMe camera] face frame failed: $error\n$stack');
     } finally {
       _isDetecting = false;
     }
@@ -202,9 +411,7 @@ class _CameraScreenState extends State<CameraScreen>
     return count == 0 ? 128 : sum / count;
   }
 
-  InputImage? _toInputImage(CameraImage image) {
-    final controller = _controller;
-    if (controller == null) return null;
+  InputImage? _toInputImage(CameraImage image, CameraController controller) {
     final sensorOrientation = controller.description.sensorOrientation;
     final rotation =
         InputImageRotationValue.fromRawValue(sensorOrientation) ??
@@ -269,7 +476,7 @@ class _CameraScreenState extends State<CameraScreen>
 
   //Capture
   Future<void> _capture() async {
-    if (_guidance != _Guidance.ready || _capturing) return;
+    if (!_canCapture) return;
 
     if (kUiPreviewMode) {
       Navigator.push(
@@ -278,32 +485,94 @@ class _CameraScreenState extends State<CameraScreen>
           builder: (_) => const ProcessingScreen(imagePath: null, answers: {}),
         ),
       );
+      return;
     }
 
     final controller = _controller;
     if (controller == null) return;
+    final generation = _generation;
+    String? imagePath;
     setState(() => _capturing = true);
     try {
-      await controller.stopImageStream();
-      final file = await controller.takePicture();
-      if (!mounted) return;
-      Navigator.push(
+      await _serialize(() async {
+        if (!_canUseCamera ||
+            generation != _generation ||
+            !identical(controller, _controller)) {
+          return;
+        }
+        if (controller.value.isStreamingImages) {
+          await controller.stopImageStream();
+        }
+        await _detectionTask;
+        if (!_canUseCamera || generation != _generation) return;
+        debugPrint(
+          '[SeasonMe camera] takePicture ${controller.description.name}',
+        );
+        final captured = await controller.takePicture();
+        final file = File(captured.path);
+        if (!await file.exists() || await file.length() == 0) {
+          throw CameraException(
+            'emptyCapture',
+            'Captured image is missing or empty',
+          );
+        }
+        final codec = await ui.instantiateImageCodec(await file.readAsBytes());
+        try {
+          final frame = await codec.getNextFrame();
+          try {
+            debugPrint(
+              '[SeasonMe camera] captured ${captured.path}, '
+              'bytes=${await file.length()}, '
+              'size=${frame.image.width}x${frame.image.height}',
+            );
+          } finally {
+            frame.image.dispose();
+          }
+        } finally {
+          codec.dispose();
+        }
+        if (!_canUseCamera || generation != _generation) return;
+        _routeAway = true;
+        await _releaseCamera();
+        // Do not navigate if the app was suspended during camera cleanup.
+        if (!mounted ||
+            _disposed ||
+            !_foreground ||
+            generation != _generation) {
+          _routeAway = false;
+          return;
+        }
+        imagePath = captured.path;
+      });
+      if (imagePath == null || !mounted) return;
+      await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => QuestionnaireScreen(imagePath: file.path),
+          builder: (_) => QuestionnaireScreen(imagePath: imagePath!),
         ),
       );
-    } catch (_) {
-      if (mounted) setState(() => _capturing = false);
-      final c = _controller;
-      if (c != null && c.value.isInitialized && !c.value.isStreamingImages) {
-        await c.startImageStream(_onFrame);
+    } catch (error, stack) {
+      _routeAway = false;
+      _reportCameraError('Capture', error, stack);
+    } finally {
+      final returningFromQuestionnaire = _routeAway;
+      _routeAway = false;
+      if (mounted && !_disposed) {
+        setState(() => _capturing = false);
+        if (_foreground &&
+            (returningFromQuestionnaire ||
+                (_controller == null && _cameraError == null))) {
+          await _initCamera(preferredIndex: _cameraIndex);
+        }
       }
     }
   }
 
   //UI
   String get _statusMessage {
+    if (!kUiPreviewMode && _basicCameraMode) {
+      return _cameraBusy ? 'Starting camera…' : 'Camera ready';
+    }
     switch (_guidance) {
       case _Guidance.initializing:
         return 'Starting camera…';
@@ -350,7 +619,7 @@ class _CameraScreenState extends State<CameraScreen>
         return AppColors.gold;
       case _Guidance.initializing:
       case _Guidance.noFace:
-        return Colors.white.withOpacity(0.7);
+        return Colors.white.withValues(alpha: 0.7);
       default:
         return AppColors.blush;
     }
@@ -363,7 +632,9 @@ class _CameraScreenState extends State<CameraScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (_controller != null && _controller!.value.isInitialized)
+          if (_canUseCamera &&
+              _controller != null &&
+              _controller!.value.isInitialized)
             Center(child: CameraPreview(_controller!))
           else
             Container(
@@ -391,14 +662,14 @@ class _CameraScreenState extends State<CameraScreen>
               children: [
                 _buildTopBar(context),
                 const Spacer(),
-                if (_permissionDenied)
-                  _buildPermissionDenied()
+                if (_cameraError != null)
+                  _buildCameraError()
                 else ...[
                   _buildInstructionPill(),
                   const SizedBox(height: 14),
                 ],
                 const SizedBox(height: 28),
-                if (!_permissionDenied) _buildBottomControls(),
+                if (_cameraError == null) _buildBottomControls(),
                 if (kUiPreviewMode) _buildPreviewStateChips(),
                 const SizedBox(height: 24),
               ],
@@ -464,7 +735,9 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Widget _buildInstructionPill() {
-    final ready = _guidance == _Guidance.ready;
+    final ready = _basicCameraMode && !kUiPreviewMode
+        ? _cameraReady
+        : _guidance == _Guidance.ready;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
@@ -494,7 +767,7 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
-  Widget _buildPermissionDenied() {
+  Widget _buildCameraError() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -505,8 +778,10 @@ class _CameraScreenState extends State<CameraScreen>
             size: 36,
           ),
           const SizedBox(height: 12),
-          const Text(
-            'We need camera access to scan your face.\nPlease enable it in your device settings.',
+          Text(
+            _permissionDenied
+                ? 'Camera access denied. Please enable it in device settings.\n$_cameraError'
+                : _cameraError ?? 'Camera unavailable',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70, fontSize: 13),
           ),
@@ -516,7 +791,9 @@ class _CameraScreenState extends State<CameraScreen>
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white54),
             ),
-            onPressed: () => _initCamera(),
+            onPressed: _cameraBusy || _capturing
+                ? null
+                : () => _initCamera(preferredIndex: _cameraIndex),
             child: const Text('Try Again'),
           ),
         ],
@@ -525,7 +802,7 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Widget _buildBottomControls() {
-    final ready = _guidance == _Guidance.ready && !_capturing;
+    final ready = _canCapture;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -688,7 +965,10 @@ class _FaceOvalPainter extends CustomPainter {
       scrimPath,
       holePath,
     );
-    canvas.drawPath(maskPath, Paint()..color = Colors.black.withOpacity(0.6));
+    canvas.drawPath(
+      maskPath,
+      Paint()..color = Colors.black.withValues(alpha: 0.6),
+    );
 
     // Dashed outer oval.
     _drawDashedOval(canvas, outerRect, Colors.white54, 1.5, 6, 5);

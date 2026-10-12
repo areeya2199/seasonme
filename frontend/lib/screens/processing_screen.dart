@@ -3,9 +3,9 @@ import 'dart:math';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../data/season_palette.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'result_screen.dart';
 
@@ -41,29 +41,27 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
   static const Color _doneGreen = Color(0xFF3E9C6D);
 
+  String _analysisError =
+      'Analysis failed — no season was returned. Please try again.';
+
   Future<Map<String, dynamic>?> _uploadImage() async {
     try {
-      var request = http.MultipartRequest(
-        "POST",
-        Uri.parse("http://10.0.2.2:8000/analyze"),
-      );
-
-      request.files.add(
-        await http.MultipartFile.fromPath("file", widget.imagePath!),
-      );
-
-      request.fields["answers"] = jsonEncode(
-        widget.answers.map((key, value) => MapEntry(key.toString(), value)),
-      );
-
-      var response = await request.send();
-
-      if (response.statusCode == 200) {
-        final body = await response.stream.bytesToString();
-        print(body);
-
-        return jsonDecode(body);
-      }
+      return await ApiService().analyzeImage(widget.imagePath!, widget.answers);
+    } on TimeoutException catch (e) {
+      print(e);
+      if (!mounted) return null;
+      _analysisError =
+          'Analysis timed out. Please try again when the server is available.';
+    } on SocketException catch (e) {
+      print(e);
+      if (!mounted) return null;
+      _analysisError =
+          'Unable to connect to the analysis server. Please try again.';
+    } on http.ClientException catch (e) {
+      print(e);
+      if (!mounted) return null;
+      _analysisError =
+          'Unable to connect to the analysis server. Please try again.';
     } catch (e) {
       print(e);
     }
@@ -84,19 +82,15 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           if (!mounted) return;
 
           final result = await _uploadImage();
+          if (!mounted) return;
 
           // The server might reply with 200 but no usable "season" (e.g. an
           // error payload). A hard `as String` cast on null throws
           // "type 'Null' is not a subtype of type 'String'", so check first.
           final seasonName = result?["season"];
           if (result == null || seasonName is! String) {
-            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Analysis failed — no season was returned. Please try again.',
-                ),
-              ),
+              SnackBar(content: Text(_analysisError)),
             );
             Navigator.pop(context);
             return;

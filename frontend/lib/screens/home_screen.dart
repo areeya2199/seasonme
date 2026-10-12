@@ -5,6 +5,7 @@ import '../services/analysis_history.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/color_utils.dart';
+import '../utils/undertone_utils.dart';
 import 'select_screen.dart';
 import 'result_screen.dart';
 import 'profile_screen.dart';
@@ -192,10 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     children: [
                       _pillTag(
-                        profile.undertone.replaceAll(
-                          ' undertone',
-                          ' undertone',
-                        ),
+                        UndertoneUtils.label(latest.analysis, withSuffix: true),
                         cardText,
                       ),
                       const SizedBox(width: 8),
@@ -242,6 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         MaterialPageRoute(
                           builder: (_) => ResultScreen(
                             season: latest.season,
+                            analysis: latest.analysis,
                             recordToHistory: false,
                             localImageKey: latest.localImageKey,
                           ),
@@ -280,7 +279,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Icon(
                         Icons.checkroom_outlined,
                         size: 16,
-                        color: Color(0xffee81b3),
+                        color: Color(0xfff4cce9),
+
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -289,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontSize: 12,
                           letterSpacing: 1.4,
                           fontWeight: FontWeight.normal,
-                          color: const Color(0xffee81b3).withOpacity(0.9),
+                          color: const Color(0xfff4cce9).withOpacity(0.95),
                         ),
                       ),
                     ],
@@ -308,9 +308,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text(
                     'Find out how your outfit fits your season.',
                     style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xffee81b3),
-                      fontWeight: FontWeight.normal,
+                      fontSize: 15,
+                      color: Color(0xfff4cce9),
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -319,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xff810955)),
+                        side: const BorderSide(color: Color(0xff56021f)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -336,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         'Check Your Outfit',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 16,
                           color: Colors.white,
                         ),
                       ),
@@ -354,6 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(
                   builder: (_) => ResultScreen(
                     season: latest.season,
+                    analysis: latest.analysis,
                     recordToHistory: false,
                     localImageKey: latest.localImageKey,
                   ),

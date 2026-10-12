@@ -8,6 +8,8 @@ import 'package:frontend/data/season_palette.dart';
 import 'package:frontend/screens/result_screen.dart';
 import 'package:frontend/services/analysis_history.dart';
 import 'package:frontend/theme/season_card_colors.dart';
+import 'package:frontend/utils/color_utils.dart';
+import 'package:frontend/utils/undertone_utils.dart';
 import 'package:image/image.dart' as img;
 
 // Firestore snapshots are faked only at the deserialization boundary in tests.
@@ -36,6 +38,40 @@ void main() {
 
   tearDownAll(() => photoDirectory.deleteSync(recursive: true));
 
+  test('undertone formats only recognized analysis values', () {
+    for (final value in ['Warm', ' warm ', 'WARM UNDERTONE']) {
+      final analysis = <String, dynamic>{'undertone': value};
+      expect(UndertoneUtils.label(analysis), 'Warm');
+      expect(
+        UndertoneUtils.label(analysis, withSuffix: true),
+        'Warm undertone',
+      );
+    }
+    for (final value in ['Cool', ' cool ', 'Cool undertone']) {
+      final analysis = <String, dynamic>{'undertone': value};
+      expect(UndertoneUtils.label(analysis), 'Cool');
+      expect(
+        UndertoneUtils.label(analysis, withSuffix: true),
+        'Cool undertone',
+      );
+    }
+    for (final analysis in <Map<String, dynamic>?>[
+      null,
+      {},
+      {'undertone': null},
+      {'undertone': ''},
+      {'undertone': '   '},
+      {'undertone': 42},
+      {'undertone': false},
+      {'undertone': []},
+      {'undertone': 'Neutral'},
+      {'season': 'Spring', 'warm_total': 1, 'cool_total': 0},
+    ]) {
+      expect(UndertoneUtils.label(analysis), '—');
+      expect(UndertoneUtils.label(analysis, withSuffix: true), '—');
+    }
+  });
+
   test('history only accepts the photo key belonging to its entry', () {
     AnalysisHistoryEntry entry(Object? key) {
       return AnalysisHistoryEntry.fromFirestore(
@@ -53,6 +89,7 @@ void main() {
     WidgetTester tester,
     SeasonKey season, {
     String? imagePath,
+    Map<String, dynamic>? analysis,
     double width = 430,
     double textScale = 1,
   }) async {
@@ -72,6 +109,7 @@ void main() {
           season: season,
           recordToHistory: false,
           imagePath: imagePath,
+          analysis: analysis,
         ),
       ),
     );
@@ -88,16 +126,21 @@ void main() {
     });
   }
 
-  void expectCardColors(WidgetTester tester, SeasonKey season) {
+  void expectCardColors(
+    WidgetTester tester,
+    SeasonKey season, {
+    String undertone = '—',
+    bool night = false,
+  }) {
     final card = personalCard(season);
     expect(card, findsOneWidget);
     final colors = seasonCardText(season);
-    final profile = SeasonPaletteData.getProfile(season);
+    final profile = SeasonPaletteData.getProfile(season, night: night);
     for (final value in [
       ('YOUR SEASON IS', colors.label),
       (profile.displayName, colors.title),
       (profile.description, colors.body),
-      (profile.core.warm ? 'Warm' : 'Cool', colors.pillText),
+      (undertone == '—' ? '—' : '$undertone undertone', colors.pillText),
     ]) {
       final text = tester.widget<Text>(
         find.descendant(of: card, matching: find.text(value.$1)),
@@ -123,6 +166,90 @@ void main() {
       isTrue,
     );
   }
+
+  for (final undertone in ['Warm', 'Cool']) {
+    testWidgets(
+      'analysis $undertone overrides the season label in both modes',
+      (tester) async {
+        // Deliberately disagree with the palette to detect season inference.
+        final season = undertone == 'Warm'
+            ? SeasonKey.Winter
+            : SeasonKey.Spring;
+        await showResult(tester, season, analysis: {'undertone': undertone});
+        for (final night in [false, true, false]) {
+          if (night) {
+            await tester.tap(find.text('Night Event'));
+          } else {
+            await tester.tap(find.text('Day Event'));
+          }
+          await tester.pump();
+          expectCardColors(tester, season, undertone: undertone, night: night);
+          final card = personalCard(season);
+          final profile = SeasonPaletteData.getProfile(season, night: night);
+          expect(
+            find.descendant(
+              of: card,
+              matching: find.text(
+                ColorUtils.chromaLabel(
+                  profile.topsPool.map((swatch) => swatch.color).toList(),
+                ),
+              ),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            tester.widget<ResultScreen>(find.byType(ResultScreen)).season,
+            season,
+          );
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
+  }
+
+  for (final value in [null, '', 42, 'Neutral']) {
+    testWidgets('invalid analysis undertone $value displays a dash', (
+      tester,
+    ) async {
+      await showResult(
+        tester,
+        SeasonKey.Spring,
+        analysis: {'undertone': value},
+      );
+      expectCardColors(tester, SeasonKey.Spring);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('opening different history entries uses each selected analysis', (
+    tester,
+  ) async {
+    final entries = [
+      AnalysisHistoryEntry.fromFirestore(
+        _HistoryDocument('latest', {'season': 'Winter', 'undertone': 'Cool'}),
+      ),
+      AnalysisHistoryEntry.fromFirestore(
+        _HistoryDocument('older', {'season': 'Winter', 'undertone': 'Warm'}),
+      ),
+      AnalysisHistoryEntry.fromFirestore(
+        _HistoryDocument('legacy', {'season': 'Winter'}),
+      ),
+    ];
+    for (final index in [0, 1, 2, 0]) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      final selected = entries[index];
+      await showResult(tester, selected.season, analysis: selected.analysis);
+      expectCardColors(
+        tester,
+        selected.season,
+        undertone: ['Cool', 'Warm', '—'][index],
+      );
+      final screen = tester.widget<ResultScreen>(find.byType(ResultScreen));
+      expect(screen.analysis, same(selected.analysis));
+      expect(screen.recordToHistory, isFalse);
+      expect(tester.takeException(), isNull);
+    }
+  });
 
   for (final season in SeasonKey.values) {
     testWidgets('$season keeps its text and tags without a photo', (

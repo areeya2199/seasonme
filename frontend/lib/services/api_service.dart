@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
 
-  final String baseUrl = "http://10.0.2.2:8000";
+  //final String baseUrl = "http://10.0.2.2:8000";
+  final String baseUrl = "http://172.27.228.213:8000";
 
    Future<String> hello() async {
 
@@ -21,7 +21,16 @@ class ApiService {
   }
 
 
-  Future<Map<String, dynamic>?> analyzeImage(String imagePath, Map<int, String> answers,) async {
+  Future<Map<String, dynamic>?> analyzeImage(
+    String imagePath,
+    Map<int, String?> answers,
+  ) {
+    return _analyzeImage(imagePath, answers).timeout(
+      const Duration(seconds: 30),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _analyzeImage(String imagePath, Map<int, String?> answers,) async {
 
       final url = "$baseUrl/analyze";
 
@@ -40,7 +49,9 @@ class ApiService {
       ),
     );
 
-    request.fields["answers"] = jsonEncode(answers);
+    request.fields["answers"] = jsonEncode(
+      answers.map((key, value) => MapEntry(key.toString(), value)),
+    );
 
 
     final response = await request.send();

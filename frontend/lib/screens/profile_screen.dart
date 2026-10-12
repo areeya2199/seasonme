@@ -6,6 +6,7 @@ import '../services/analysis_history.dart';
 import '../services/preferences.dart';
 import '../data/season_palette.dart';
 import '../utils/color_utils.dart';
+import '../utils/undertone_utils.dart';
 import 'result_screen.dart';
 import '../theme/season_card_colors.dart';
 
@@ -377,6 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         MaterialPageRoute(
           builder: (_) => ResultScreen(
             season: latest.season,
+            analysis: latest.analysis,
             recordToHistory: false,
             localImageKey: latest.localImageKey,
           ),
@@ -430,7 +432,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '${profile.core.warm ? 'Warm' : 'Cool'} · $chroma',
+                    '${UndertoneUtils.label(latest.analysis)} · $chroma',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -553,6 +555,7 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
                               MaterialPageRoute(
                                 builder: (_) => ResultScreen(
                                   season: item.season,
+                                  analysis: item.analysis,
                                   recordToHistory: false,
                                   localImageKey: item.localImageKey,
                                 ),

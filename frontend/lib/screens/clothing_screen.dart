@@ -364,14 +364,51 @@ class _ClothingScreenState extends State<ClothingScreen> {
     );
   }
 
-  Widget _buildIdleHint() {
-    return Text(
-      'Take or upload a photo of your outfit and the app will automatically check how well its colors match your ${_profile.displayName} season',
-      style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
-        color: AppColors.mid,
-      ),
+Widget _buildIdleHint() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'For Accurate Results',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.mid,
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        _buildHintItem(
+          'Photos other than clothing may not provide the results you are looking for.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHintItem(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.warning_rounded,
+          color: ui.Color.fromARGB(255, 255, 213, 61),
+          size: 20,
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.normal,
+              color: AppColors.mid,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
