@@ -6,6 +6,7 @@ import '../services/analysis_history.dart';
 import '../services/preferences.dart';
 import '../data/season_palette.dart';
 import '../utils/color_utils.dart';
+import '../utils/undertone_utils.dart';
 import 'result_screen.dart';
 import '../theme/season_card_colors.dart';
 
@@ -375,8 +376,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              ResultScreen(season: latest.season, recordToHistory: false),
+          builder: (_) => ResultScreen(
+            season: latest.season,
+            analysis: latest.analysis,
+            recordToHistory: false,
+            localImageKey: latest.localImageKey,
+          ),
         ),
       ),
       child: Container(
@@ -427,7 +432,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '${profile.core.warm ? 'Warm' : 'Cool'} · $chroma',
+                    '${UndertoneUtils.label(latest.analysis)} · $chroma',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -473,9 +478,17 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
 
   Future<void> _remove(int index) async {
     final item = _items[index];
-    setState(() => _items.removeAt(index));
-    await AnalysisHistoryService.remove(item.id);
-    widget.onChanged();
+    try {
+      await AnalysisHistoryService.remove(item.id);
+      if (!mounted) return;
+      setState(() => _items.removeWhere((entry) => entry.id == item.id));
+      widget.onChanged();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete analysis history.')),
+      );
+    }
   }
 
   static const List<String> _monthAbbr = [
@@ -542,7 +555,9 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
                               MaterialPageRoute(
                                 builder: (_) => ResultScreen(
                                   season: item.season,
+                                  analysis: item.analysis,
                                   recordToHistory: false,
+                                  localImageKey: item.localImageKey,
                                 ),
                               ),
                             ),

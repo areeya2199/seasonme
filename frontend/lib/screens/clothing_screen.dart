@@ -97,7 +97,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
       if (!mounted) return;
       setState(() {
         _state = _LoadState.error;
-        _errorMessage = 'อ่านสีจากภาพไม่สำเร็จ ลองใหม่อีกครั้ง';
+        _errorMessage = 'Failed to read the photo. Please try again.';
       });
     }
   }
@@ -165,9 +165,9 @@ class _ClothingScreenState extends State<ClothingScreen> {
   // smallest perceptual (Lab) distance — that's "closest" and "why". ----
   _OutfitMatch _matchAgainstSeason(Color color) {
     final candidates = <MapEntry<String, SwatchItem>>[
-      for (final s in _profile.topsPool) MapEntry('เสื้อผ้า', s),
-      for (final s in _profile.bottoms) MapEntry('เสื้อผ้า', s),
-      for (final s in _profile.jewelry) MapEntry('เครื่องประดับ', s),
+      for (final s in _profile.topsPool) MapEntry('Clothing', s),
+      for (final s in _profile.bottoms) MapEntry('Bottoms', s),
+      for (final s in _profile.jewelry) MapEntry('Jewelry', s),
     ];
 
     double bestDist = double.infinity;
@@ -365,13 +365,50 @@ class _ClothingScreenState extends State<ClothingScreen> {
   }
 
   Widget _buildIdleHint() {
-    return Text(
-      'Take or upload a photo of your outfit and the app will automatically check how well its colors match your ${_profile.displayName} season',
-      style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
-        color: AppColors.mid,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'For Accurate Results',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.mid,
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        _buildHintItem(
+          'Photos other than clothing may not provide the results you are looking for.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHintItem(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.warning_rounded,
+          color: ui.Color.fromARGB(255, 255, 213, 61),
+          size: 20,
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.normal,
+              color: AppColors.mid,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

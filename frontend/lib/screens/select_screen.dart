@@ -23,7 +23,7 @@ class SelectScreen extends StatelessWidget {
             const Text(
               'New Analysis',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 16,
                 color: AppColors.gold,
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w600,

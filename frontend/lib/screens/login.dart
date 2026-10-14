@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Center(
           child: Image.asset(
-            'assets/seasonme_logo.png',
+            'assets/seasonme_logo_2.png',
             width: 150,
             height: 150,
           ),

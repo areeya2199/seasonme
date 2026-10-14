@@ -123,7 +123,16 @@ class ColorUtils {
     return pct.round();
   }
 
-  static chromaLabel(List<Color> list) {}
+  /// Derives a simple "Bright" vs "Muted" label from a set of colors —
+  /// the palette model doesn't store a chroma/brightness attribute, so
+  /// this is computed from the actual swatches (average HSL saturation).
+  static String chromaLabel(List<Color> list) {
+    if (list.isEmpty) return 'Muted';
+    final avgSaturation =
+        list.map((c) => HSLColor.fromColor(c).saturation).reduce((a, b) => a + b) /
+            list.length;
+    return avgSaturation > 0.45 ? 'Bright' : 'Muted';
+  }
 }
 
 enum MatchLevel { excellent, good, poor }
