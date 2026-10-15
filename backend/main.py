@@ -1,8 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 import cv2
 import numpy as np
 
 from services.analysis import analyze_skin
+from services.auth import require_firebase_user
 import json
 
 app = FastAPI()
@@ -71,7 +72,7 @@ def home():
 
 
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Depends(require_firebase_user)])
 async def analyze(
     file: UploadFile = File(...),
     answers: str = Form(...)

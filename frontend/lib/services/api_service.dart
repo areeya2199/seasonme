@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class ApiService {
 
-  //final String baseUrl = "http://10.0.2.2:8000";
-  final String baseUrl = "http://172.27.228.213:8000";
+  final String baseUrl = "http://10.0.2.2:8000";
+  //final String baseUrl = "http://172.27.228.243:8000";
 
    Future<String> hello() async {
 
@@ -32,6 +33,17 @@ class ApiService {
 
   Future<Map<String, dynamic>?> _analyzeImage(String imagePath, Map<int, String?> answers,) async {
 
+      final user = AuthService.currentUser;
+      if (user == null) {
+        throw StateError('Sign in before requesting an analysis');
+      }
+
+      // Firebase refreshes an expired cached ID token automatically.
+      final idToken = await user.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        throw StateError('Unable to obtain a Firebase ID token');
+      }
+
       final url = "$baseUrl/analyze";
 
       print("Sending image to: $url");
@@ -40,6 +52,7 @@ class ApiService {
     "POST",
     Uri.parse(url),
   );
+    request.headers['Authorization'] = 'Bearer $idToken';
 
 
     request.files.add(

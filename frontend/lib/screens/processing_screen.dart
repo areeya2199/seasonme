@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -23,30 +22,23 @@ class ProcessingScreen extends StatefulWidget {
   State<ProcessingScreen> createState() => _ProcessingScreenState();
 }
 
-class _ProcessingStep {
-  final IconData icon;
-  final String label;
-  const _ProcessingStep(this.icon, this.label);
-}
-
 class _ProcessingScreenState extends State<ProcessingScreen> {
-  static const List<_ProcessingStep> _steps = [
-    _ProcessingStep(Icons.photo_camera_outlined, 'Photo received'),
-    _ProcessingStep(
-      Icons.face_retouching_natural_outlined,
-      'Reading your undertone',
-    ),
-    _ProcessingStep(Icons.palette_outlined, 'Finding your season'),
-  ];
-
-  static const Color _doneGreen = Color(0xFF3E9C6D);
-
   String _analysisError =
-      'Analysis failed — no season was returned. Please try again.';
+      'Unable to get an analysis result from the server. Please try again.';
+
+  bool _requestStarted = false;
+  bool _hasLeftScreen = false;
+  bool _navigationHandled = false;
 
   Future<Map<String, dynamic>?> _uploadImage() async {
     try {
-      return await ApiService().analyzeImage(widget.imagePath!, widget.answers);
+      final imagePath = widget.imagePath;
+      if (imagePath == null || imagePath.isEmpty) {
+        _analysisError =
+            'No photo was provided. Please choose a photo and try again.';
+        return null;
+      }
+      return await ApiService().analyzeImage(imagePath, widget.answers);
     } on TimeoutException catch (e) {
       print(e);
       if (!mounted) return null;
@@ -62,6 +54,20 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       if (!mounted) return null;
       _analysisError =
           'Unable to connect to the analysis server. Please try again.';
+    } on FileSystemException catch (e) {
+      debugPrint('$e');
+      if (!mounted) return null;
+      _analysisError = 'Unable to read your photo. Please choose it again.';
+    } on FormatException catch (e) {
+      debugPrint('$e');
+      if (!mounted) return null;
+      _analysisError =
+          'The server returned an invalid analysis response. Please try again.';
+    } on StateError catch (e) {
+      debugPrint('$e');
+      if (!mounted) return null;
+      _analysisError =
+          'Unable to prepare the analysis request. Please check your sign-in and try again.';
     } catch (e) {
       print(e);
     }
@@ -69,63 +75,79 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     return null;
   }
 
-  int _currentStep = 0;
-  Timer? _timer;
-
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 900), (timer) {
-      if (_currentStep >= _steps.length - 1) {
-        timer.cancel();
-        Future.delayed(const Duration(milliseconds: 700), () async {
-          if (!mounted) return;
+    unawaited(_processImage());
+  }
 
-          final result = await _uploadImage();
-          if (!mounted) return;
+  Future<void> _processImage() async {
+    if (_requestStarted || !mounted || _hasLeftScreen) return;
+    _requestStarted = true;
+    final loadingTime = Stopwatch()..start();
 
-          // The server might reply with 200 but no usable "season" (e.g. an
-          // error payload). A hard `as String` cast on null throws
-          // "type 'Null' is not a subtype of type 'String'", so check first.
-          final seasonName = result?["season"];
-          if (result == null || seasonName is! String) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(_analysisError)),
-            );
-            Navigator.pop(context);
-            return;
-          }
+    final result = await _uploadImage();
+    if (!mounted || _hasLeftScreen) return;
 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ResultScreen(
-                season: _convertSeason(seasonName),
-                analysis: result,
-                questionnaireAnswers: widget.answers.map(
-                  (key, value) => MapEntry(key.toString(), value),
-                ),
-                imagePath: widget.imagePath,
-              ),
-            ),
-          );
-        });
-        return;
+    // Even an immediate local failure must wait until the first build before
+    // using the route, ScaffoldMessenger, or Navigator. The request starts above.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || _hasLeftScreen || _navigationHandled) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+
+    final seasonName = result?['season'];
+    final season = seasonName is String ? _convertSeason(seasonName) : null;
+    if (result == null || result['error'] != null || season == null) {
+      _navigationHandled = true;
+      if (result != null) {
+        _analysisError = switch (result['error']) {
+          'No face detected' =>
+            'No face was detected. Please try another photo.',
+          'Invalid image' =>
+            'The photo could not be processed. Please try another photo.',
+          _ =>
+            'The server did not return a supported season. Please try again.',
+        };
       }
-      setState(() => _currentStep++);
-    });
-    print(widget.imagePath);
-    print(widget.answers);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_analysisError)));
+      Navigator.pop(context);
+      return;
+    }
+
+    // Keep fast successful responses readable without delaying the API request.
+    final remaining = const Duration(milliseconds: 2500) - loadingTime.elapsed;
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
+    }
+    if (!mounted || _hasLeftScreen || _navigationHandled) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    _navigationHandled = true;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResultScreen(
+          season: season,
+          analysis: result,
+          questionnaireAnswers: widget.answers.map(
+            (key, value) => MapEntry(key.toString(), value),
+          ),
+          imagePath: widget.imagePath,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _hasLeftScreen = true;
     super.dispose();
   }
 
-  SeasonKey _convertSeason(String season) {
-    switch (season.toLowerCase()) {
+  SeasonKey? _convertSeason(String season) {
+    switch (season.trim().toLowerCase()) {
       case "spring":
         return SeasonKey.Spring;
 
@@ -139,135 +161,81 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         return SeasonKey.Winter;
 
       default:
-        return SeasonKey.Summer;
+        return null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GradientScaffold(
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 84,
-              height: 84,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const SizedBox(
-                    width: 84,
-                    height: 84,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation(AppColors.gold),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.auto_awesome,
-                    size: 28,
-                    color: AppColors.charcoal,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'A PALETTE IN THE MAKING',
-              style: TextStyle(
-                fontSize: 11.5,
-                letterSpacing: 1.6,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Finding your\nnatural harmony.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Lora',
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: AppColors.charcoal,
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'We\'re bringing your photo\nand answers together.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppColors.mid, height: 1.4),
-            ),
-            const SizedBox(height: 32),
-            ..._steps.asMap().entries.map((entry) {
-              final index = entry.key;
-              final step = entry.value;
-              final isDone =
-                  index < _currentStep ||
-                  (index == _currentStep && _currentStep == _steps.length - 1);
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.charcoal.withOpacity(0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
+    return PopScope<Object?>(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) _hasLeftScreen = true;
+      },
+      child: GradientScaffold(
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 84,
+                  height: 84,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: (isDone ? _doneGreen : AppColors.charcoal)
-                              .withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        child: Icon(
-                          step.icon,
-                          size: 17,
-                          color: isDone ? _doneGreen : AppColors.charcoal,
+                      const SizedBox(
+                        width: 84,
+                        height: 84,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation(AppColors.gold),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          step.label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: isDone ? AppColors.charcoal : AppColors.mid,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        isDone
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        size: 18,
-                        color: isDone
-                            ? _doneGreen
-                            : AppColors.mid.withOpacity(0.4),
+                      const Icon(
+                        Icons.auto_awesome,
+                        size: 28,
+                        color: AppColors.charcoal,
                       ),
                     ],
                   ),
                 ),
-              );
-            }),
-          ],
+                const SizedBox(height: 24),
+                const Text(
+                  'A PALETTE IN THE MAKING',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.gold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Finding your\nnatural harmony.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Lora',
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.charcoal,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Sending your photo and\nwaiting for analysis...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.mid,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
