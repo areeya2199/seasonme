@@ -24,7 +24,7 @@ options = FaceLandmarkerOptions(
 
 landmarker = FaceLandmarker.create_from_options(options)
 
-
+#จุดบนใบหน้า
 left_cheek = [
     36, 206, 207, 187, 123,
     116, 117, 118, 119, 100
@@ -35,7 +35,7 @@ right_cheek = [
     345, 346, 347, 348, 329
 ]
 
-
+#คิดคะแนนจากคำตอบของแบบสอบถาม
 def _calculate_questionnaire_scores(answers):
     score_map = {
         "0": {
@@ -67,7 +67,7 @@ def _calculate_questionnaire_scores(answers):
         warm_score += warm_points
         cool_score += cool_points
         answered_count += 1
-
+    #หาคะแนนเฉลี่ยของคำตอบที่ตอบแล้วถ้าไม่ตอบให้ค่าเท่ากนทั้ง2ฝั่ง
     if answered_count == 0:
         warm_question = 0.5
         cool_question = 0.5
@@ -75,6 +75,7 @@ def _calculate_questionnaire_scores(answers):
         warm_question = warm_score / answered_count
         cool_question = cool_score / answered_count
 
+    #คิด
     questionnaire_weight = 0.30 * (answered_count / 3)
     image_weight = 1.0 - questionnaire_weight
 
@@ -86,7 +87,7 @@ def _calculate_questionnaire_scores(answers):
         "image_weight": image_weight,
     }
 
-
+#เลือกฤดูจาก undertone, preference, L_star, chroma
 def _select_season(undertone, preference, L_star, chroma):
     if undertone == "Warm":
         if preference == "Bright & vivid":
@@ -94,36 +95,34 @@ def _select_season(undertone, preference, L_star, chroma):
         if preference == "Deep & rich":
             return "Autumn"
 
-        # Soft/muted and skipped preferences use image measurements.
+        # Soft/muted and skipped preferences ใช้ค่า L_star และ chroma ในการตัดสินใจ
         if L_star > 66 and chroma >= 45:
             return "Spring"
         return "Autumn"
-
+    
+    #cool undertone
     if preference == "Soft & muted":
         return "Summer"
     if preference == "Deep & rich":
         return "Winter"
 
-    # Bright/vivid and skipped preferences use image measurements.
+    # Bright/vivid and skipped preferences ใช้ค่า L_star และ chroma ในการตัดสินใจ
     if L_star > 66 and chroma < 45:
         return "Summer"
     return "Winter"
 
-
+#วิเคราะห์ภาพ
 def analyze_skin(image, answers):
-    
-
     # resize
-    imageresize = cv2.resize(image, (640, 680))
-
-
-    # BGR RGB
+    #imageresize = cv2.resize(image, (640, 680))
+    
+    # convert BGR to RGB ส่งภาพไปให้ mediapipe
     rgb_image = cv2.cvtColor(
-        imageresize,
+        image,
         cv2.COLOR_BGR2RGB
     )
 
-
+    #เก็บรูปให้อยู่ในรูปแบบ mediapipe image
     mp_image = mp.Image(
         image_format=mp.ImageFormat.SRGB,
         data=rgb_image
@@ -132,7 +131,7 @@ def analyze_skin(image, answers):
 
     result = landmarker.detect(mp_image)
 
-
+    #ตรวจสอบว่ามีใบหน้า
     if not result.face_landmarks:
         return {
             "error": "No face detected"
@@ -142,14 +141,14 @@ def analyze_skin(image, answers):
     landmarks = result.face_landmarks[0]
 
 
-    height, width, _ = imageresize.shape
+    height, width, _ = image.shape
 
 
     left_points = []
     right_points = []
 
 
-    # left cheek
+    # left cheek เก็บพิกัดของจุดบนแก้มซ้าย
     for index in left_cheek:
 
         point = landmarks[index]
@@ -160,7 +159,7 @@ def analyze_skin(image, answers):
         left_points.append((x, y))
 
 
-    # right cheek
+    # right cheek เก็บพิกัดของจุดบนแก้มขวา
     for index in right_cheek:
 
         point = landmarks[index]
@@ -175,13 +174,13 @@ def analyze_skin(image, answers):
     right_points_np = np.array(right_points)
 
 
-    # mask
+    # สร้าง mask สำหรับแก้มซ้ายและขวา
     mask = np.zeros(
         (height, width),
         dtype=np.uint8
     )
 
-
+    #เติมพื้นที่ใน mask สำหรับแก้มซ้ายและขวา
     cv2.fillPoly(
         mask,
         [left_points_np],
@@ -194,20 +193,17 @@ def analyze_skin(image, answers):
         255
     )
 
-
     # BGR
     mean_bgr = cv2.mean(
-        imageresize,
+        image,
         mask=mask
     )
 
     b, g, r, _ = mean_bgr
 
-
-
     # HSV
     hsv_image = cv2.cvtColor(
-        imageresize,
+        image,
         cv2.COLOR_BGR2HSV
     )
 
@@ -219,11 +215,9 @@ def analyze_skin(image, answers):
     hue, sat, val, _ = mean_hsv
     
 
-
-
     # LAB
     lab_image = cv2.cvtColor(
-        imageresize,
+        image,
         cv2.COLOR_BGR2Lab
     )
 
@@ -231,7 +225,6 @@ def analyze_skin(image, answers):
         lab_image,
         mask=mask
     )
-
 
     l, a, b_lab, _ = mean_lab
 
@@ -277,10 +270,6 @@ def analyze_skin(image, answers):
     questionnaire = _calculate_questionnaire_scores(answers)
 
     
-
-
-
-
     if hue_angle > 60:
         image_warm = 1
         image_cool = 0
@@ -332,20 +321,7 @@ def analyze_skin(image, answers):
 
 
     season = _select_season(undertone, preference, L_star, chroma)
-    # # Personal Color 
-    # if undertone == "Warm":
 
-    #     if L_star > 66 and chroma >= 45:
-    #         season = "Spring"
-    #     else:
-    #         season = "Autumn"
-
-    # else:  # Cool
-
-    #     if L_star > 66 and chroma < 45:
-    #         season = "Summer"
-    #     else:
-    #         season = "Winter"
     print("season =", season)
 
     return {

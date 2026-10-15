@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
@@ -105,38 +103,6 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
     } catch (_) {
       if (mounted) setState(() => _guidance = _Guidance.noFace);
     }
-  }
-
-  Future<Map<String, dynamic>?> _uploadImage() async {
-    if (_imagePath == null) return null;
-
-    try {
-      var request = http.MultipartRequest(
-        "POST",
-        Uri.parse("http://10.0.2.2:8000/analyze"),
-      );
-
-      request.files.add(await http.MultipartFile.fromPath("file", _imagePath!));
-
-      var response = await request.send();
-
-      if (response.statusCode == 200) {
-        final body = await response.stream.bytesToString();
-
-        final data = jsonDecode(body);
-
-        print("API Result:");
-        print(data);
-
-        return data;
-      } else {
-        print("API Error: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Upload Error: $e");
-    }
-
-    return null;
   }
 
   //too dark/too bright
