@@ -125,203 +125,221 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Progress
-              Row(
-                children: [
-                  const Text(
-                    'Color Quiz',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.charcoal,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${_step + 1}/${_questions.length}',
-                    style: const TextStyle(fontSize: 14, color: AppColors.mid),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: (_step + 1) / _questions.length,
-                  backgroundColor: AppColors.charcoal.withOpacity(0.08),
-                  color: AppColors.gold,
-                  minHeight: 6,
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              Text(
-                q.title,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.charcoal,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                q.subtitle,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
-                  color: AppColors.mid,
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              // Options
-              ...q.options.map((opt) {
-                final isSelected = _selected == opt.label;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selected = opt.label;
-                        _answers[_step] = opt.label;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.gold.withOpacity(0.12)
-                            : AppColors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.gold
-                              : Colors.transparent,
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.charcoal.withOpacity(0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+        child: CustomScrollView(
+          slivers: [
+            // Preserve the bottom spacing on tall screens and allow the
+            // existing content to scroll when it exceeds the viewport.
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Progress
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Color Quiz',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.charcoal,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ],
+                        ),
+                        Text(
+                          '${_step + 1}/${_questions.length}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.mid,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: (_step + 1) / _questions.length,
+                        backgroundColor: AppColors.charcoal.withOpacity(0.08),
+                        color: AppColors.gold,
+                        minHeight: 6,
                       ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  opt.label,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  opt.hint,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.mid,
-                                  ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    Text(
+                      q.title,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.charcoal,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      q.subtitle,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        color: AppColors.mid,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Options
+                    ...q.options.map((opt) {
+                      final isSelected = _selected == opt.label;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selected = opt.label;
+                              _answers[_step] = opt.label;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.gold.withOpacity(0.12)
+                                  : AppColors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.gold
+                                    : Colors.transparent,
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.charcoal.withOpacity(0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                          ),
-                          if (isSelected)
-                            const Icon(
-                              Icons.check_circle,
-                              color: AppColors.gold,
-                              size: 20,
-                            )
-                          else
-                            Icon(
-                              Icons.circle_outlined,
-                              color: AppColors.mid.withOpacity(0.3),
-                              size: 20,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        opt.label,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        opt.hint,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.mid,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: AppColors.gold,
+                                    size: 20,
+                                  )
+                                else
+                                  Icon(
+                                    Icons.circle_outlined,
+                                    color: AppColors.mid.withOpacity(0.3),
+                                    size: 20,
+                                  ),
+                              ],
                             ),
-                        ],
+                          ),
+                        ),
+                      );
+                    }),
+
+                    const Spacer(),
+
+                    // Continue box (top) and Skip box (bottom) — two clearly
+                    // separate, equally-prominent boxes, with a caption under
+                    // the skip box explaining the trade-off.
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _selected != null ? _next : null,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                        ),
+                        child: Text(
+                          _step == _questions.length - 1
+                              ? 'Finish'
+                              : 'Continue',
+                          style: const TextStyle(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              }),
-
-              const Spacer(),
-
-              // Continue box (top) and Skip box (bottom) — two clearly
-              // separate, equally-prominent boxes, with a caption under
-              // the skip box explaining the trade-off.
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _selected != null ? _next : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _skip,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(
+                            color: AppColors.mid.withOpacity(0.35),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                        ),
+                        child: const Text(
+                          'Skip',
+                          style: TextStyle(
+                            color: AppColors.charcoal,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    _step == _questions.length - 1 ? 'Finish' : 'Continue',
-                    style: const TextStyle(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                    const SizedBox(height: 8),
+                    const SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        'Skipping won\'t break the analysis it just makes the result a bit less precise.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.normal,
+                          color: AppColors.mid,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _skip,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    side: BorderSide(color: AppColors.mid.withOpacity(0.35)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                  ),
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(
-                      color: AppColors.charcoal,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'Skipping won\'t break the analysis it just makes the result a bit less precise.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.normal,
-                    color: AppColors.mid,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

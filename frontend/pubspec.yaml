@@ -104,6 +104,15 @@ flutter:
         - assets/seasonme_logo_2.png
         - assets/account-restriction.png
         - assets/person.png
+        - assets/preview_face_base.png
+        - assets/preview_face_blush.png
+        - assets/preview_face_earrings.png
+        - assets/preview_face_eyeshadow.png
+        - assets/preview_face_hair.png
+        - assets/preview_face_lips.png
+        - assets/preview_mannequin_base.png
+        - assets/preview_mannequin_shirt.png
+        - assets/preview_mannequin_skirt.png
 
   fonts:
     - family: Lora 
