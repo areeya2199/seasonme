@@ -8,7 +8,7 @@ List<Color> seasonCardGradient(SeasonKey season) {
     case SeasonKey.Spring:
       return const [Color(0xff5d8736), Color(0xff809d3c)];
     case SeasonKey.Summer:
-      return const [Color(0xffffa259), Color(0xffffcb56)];
+      return const [Color(0xffec6530), Color(0xffffcb56)];
     case SeasonKey.Autumn:
       return const [Color(0xff6b240c), Color(0xff994d1c)];
     case SeasonKey.Winter:

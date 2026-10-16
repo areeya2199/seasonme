@@ -46,8 +46,6 @@ class ApiService {
 
       final url = "$baseUrl/analyze";
 
-      print("Sending image to: $url");
-
   var request = http.MultipartRequest(
     "POST",
     Uri.parse(url),
@@ -66,7 +64,6 @@ class ApiService {
       answers.map((key, value) => MapEntry(key.toString(), value)),
     );
 
-
     final response = await request.send();
 
 
@@ -77,8 +74,6 @@ class ApiService {
       return jsonDecode(body);
 
     } else {
-
-      print("API Error: ${response.statusCode}");
 
       return null;
     }
