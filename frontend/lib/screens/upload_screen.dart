@@ -40,8 +40,9 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
   @override
   void initState() {
     super.initState();
+    // Match the live camera detector's performance mode.
     _faceDetector = FaceDetector(
-      options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate),
+      options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
     );
   }
 
@@ -57,7 +58,7 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
       source: ImageSource.gallery,
       imageQuality: 90,
     );
-    if (xfile == null) return;
+    if (xfile == null || !mounted) return;
     setState(() {
       _imagePath = xfile.path;
       _guidance = _Guidance.analyzing;
@@ -74,7 +75,10 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
         return;
       }
 
-      final brightness = _estimateBrightness(decoded);
+      // Respect EXIF orientation so coordinates and brightness use the
+      // same upright image orientation as ML Kit.
+      final upright = img.bakeOrientation(decoded);
+      final brightness = _estimateBrightness(upright);
       _Guidance? lightIssue;
       if (brightness < 70) {
         lightIssue = _Guidance.tooDark;
@@ -94,18 +98,20 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
       } else {
         next = _evaluateFace(
           faces.first,
-          decoded.width.toDouble(),
-          decoded.height.toDouble(),
+          upright.width.toDouble(),
+          upright.height.toDouble(),
         );
       }
 
       if (mounted) setState(() => _guidance = next);
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('[SeasonMe upload] image analysis failed: $error\n$stack');
       if (mounted) setState(() => _guidance = _Guidance.noFace);
     }
   }
 
-  //too dark/too bright
+  // Use the same brightness thresholds as CameraScreen.
+  // The gallery image is RGB, so estimate luma from sampled pixels.
   double _estimateBrightness(img.Image image) {
     final stepX = (image.width / 60).clamp(1, image.width).round();
     final stepY = (image.height / 60).clamp(1, image.height).round();
@@ -122,19 +128,25 @@ class _UploadPhotoScreenState extends State<UploadPhotoScreen> {
     return count == 0 ? 128 : sum / count;
   }
 
+  // Match CameraScreen's horizontal/vertical positioning and face-size limits.
   _Guidance _evaluateFace(Face face, double imgW, double imgH) {
     final box = face.boundingBox;
-    final dx = (box.left + box.width / 2 - imgW / 2) / imgW;
-    final dy = (box.top + box.height / 2 - imgH / 2) / imgH;
+    final dx = (box.left + box.width / 2 - imgW * 0.5) / imgW;
+    final dy = (box.top + box.height / 2 - imgH * 0.42) / imgH;
 
-    const centerTolerance = 0.15;
-    if (dx.abs() > centerTolerance || dy.abs() > centerTolerance) {
+    const horizontalTolerance = 0.17;
+    const verticalTolerance = 0.19;
+
+    if (dx.abs() > horizontalTolerance) {
+      return _Guidance.offCenter;
+    }
+    if (dy.abs() > verticalTolerance) {
       return _Guidance.offCenter;
     }
 
     final faceWidthFraction = box.width / imgW;
-    if (faceWidthFraction < 0.28) return _Guidance.tooSmall;
-    if (faceWidthFraction > 0.75) return _Guidance.tooLarge;
+    if (faceWidthFraction < 0.25) return _Guidance.tooSmall;
+    if (faceWidthFraction > 0.72) return _Guidance.tooLarge;
 
     return _Guidance.ready;
   }

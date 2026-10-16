@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -58,6 +59,8 @@ class _ResultScreenState extends State<ResultScreen> {
   Color? _shirtColor;
   Color? _pantsColor;
   final Map<String, Color> _beautyPicks = {};
+  // Name + hex of the swatch that was just tapped (small popup, auto-hides)
+  SwatchItem? _beautyInfo;
 
   int _topsGroupIndex = 0;
 
@@ -94,6 +97,11 @@ class _ResultScreenState extends State<ResultScreen> {
     if (widget.imagePath == null && widget.localImageKey != null) {
       _loadHistoryPhoto();
     }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   Future<void> _loadHistoryPhoto() async {
@@ -235,12 +243,14 @@ class _ResultScreenState extends State<ResultScreen> {
 
   // Tapping a Beauty swatch sets that category's color on the preview;
   // tapping it again clears it. Other categories are never touched.
-  void _onBeautyTap(String category, Color color) {
+  void _onBeautyTap(String category, SwatchItem item) {
     setState(() {
-      if (_beautyPicks[category] == color) {
+      if (_beautyPicks[category] == item.color) {
         _beautyPicks.remove(category);
+        _beautyInfo = null;
       } else {
-        _beautyPicks[category] = color;
+        _beautyPicks[category] = item.color;
+        _beautyInfo = item;
       }
     });
   }
@@ -617,8 +627,8 @@ class _ResultScreenState extends State<ResultScreen> {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
                     color: active ? Colors.white : AppColors.mid,
                   ),
                 ),
@@ -873,20 +883,16 @@ class _ResultScreenState extends State<ResultScreen> {
                     style: const TextStyle(fontSize: 12, color: AppColors.mid),
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 12,
-                    children: _beautyItems(_beautyCategory)
-                        .map(
-                          (s) => _SwatchTile(
-                            item: s,
-                            size: 64,
-                            selected: picked == s.color,
-                            onTap: () => _onBeautyTap(_beautyCategory, s.color),
-                          ),
-                        )
-                        .toList(),
+                  _compactSwatchWrap(
+                    _beautyItems(_beautyCategory),
+                    selectedColor: picked,
+                    onTap: (i) => _onBeautyTap(
+                      _beautyCategory,
+                      _beautyItems(_beautyCategory)[i],
+                    ),
                   ),
+                  const SizedBox(height: 10),
+                  _beautyInfoPopup(),
                 ],
               ),
             ),
@@ -904,10 +910,90 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  // Small popup under the palette: name + hex of the tapped color.
+  // It reserves its own space, so nothing moves and nothing is covered.
+  Widget _beautyInfoPopup() {
+    final item = _beautyInfo;
+    final hex = item == null
+        ? ''
+        : '#${item.color.value.toRadixString(16).substring(2).toUpperCase()}';
+    return SizedBox(
+      height: 44,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: item == null ? 0 : 1,
+          duration: const Duration(milliseconds: 150),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.charcoal.withOpacity(0.10),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: item?.color ?? Colors.transparent,
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: Colors.white, width: 1),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item?.name ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.charcoal,
+                          ),
+                        ),
+                        Text(
+                          hex,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.mid,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _beautyChip(String c) {
     final active = _beautyCategory == c;
     return GestureDetector(
-      onTap: () => setState(() => _beautyCategory = c),
+      onTap: () {
+        setState(() {
+          _beautyCategory = c;
+          _beautyInfo = null;
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
         alignment: Alignment.center,
@@ -1017,73 +1103,6 @@ class _OccasionSheet extends StatelessWidget {
               const SizedBox(height: 8),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SwatchTile extends StatelessWidget {
-  final SwatchItem item;
-  final double size;
-  final bool selected;
-  final VoidCallback? onTap;
-  const _SwatchTile({
-    required this.item,
-    this.size = 90,
-    this.selected = false,
-    this.onTap,
-  });
-
-  String get _hex =>
-      '#${item.color.value.toRadixString(16).substring(2).toUpperCase()}';
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: size,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: size,
-              height: size * 0.62,
-              decoration: BoxDecoration(
-                color: item.color,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: selected ? AppColors.gold : Colors.white,
-                  width: selected ? 2.5 : 1,
-                ),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.gold.withOpacity(0.4),
-                          blurRadius: 5,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              item.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.charcoal,
-              ),
-            ),
-            Text(
-              _hex,
-              style: const TextStyle(fontSize: 9.5, color: AppColors.mid),
-            ),
-          ],
         ),
       ),
     );
