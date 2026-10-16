@@ -109,6 +109,8 @@ flutter:
         - assets/preview_face_earrings.png
         - assets/preview_face_eyeshadow.png
         - assets/preview_face_hair.png
+        - assets/preview_face_hair_local.png
+        - assets/preview_face_hair_remote.png
         - assets/preview_face_lips.png
         - assets/preview_mannequin_base.png
         - assets/preview_mannequin_shirt.png

@@ -371,7 +371,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         Icons.checkroom_outlined,
                         size: 16,
                         color: Color(0xfff4cce9),
-
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -410,6 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
+                        backgroundColor: const Color(0xff56021f),
                         side: const BorderSide(color: Color(0xff56021f)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(

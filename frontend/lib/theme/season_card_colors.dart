@@ -8,7 +8,7 @@ List<Color> seasonCardGradient(SeasonKey season) {
     case SeasonKey.Spring:
       return const [Color(0xff5d8736), Color(0xff809d3c)];
     case SeasonKey.Summer:
-      return const [Color(0xffa87676), Color(0xffca8787)];
+      return const [Color(0xffffa259), Color(0xffffcb56)];
     case SeasonKey.Autumn:
       return const [Color(0xff6b240c), Color(0xff994d1c)];
     case SeasonKey.Winter:
@@ -81,7 +81,7 @@ SeasonCardText seasonCardText(SeasonKey season) {
         title: const Color(0xffffffff),
         body: const Color(0xffffffff),
         pillText: const Color(0xffffffff),
-        pillBg: const Color(0xffffffff).withOpacity(0.18),
+        pillBg: const Color(0xffd9eafd).withOpacity(0.18),
         buttonBg: const Color(0xffffffff),
         buttonText: AppColors.charcoal,
         swatchBorder: const Color(0xffffffff),
@@ -107,7 +107,7 @@ SeasonCardText seasonCardText(SeasonKey season) {
         title: AppColors.charcoal,
         body: AppColors.charcoal,
         pillText: AppColors.charcoal,
-       pillBg: const Color(0xffffffff).withOpacity(0.18),
+        pillBg: const Color(0xffffffff).withOpacity(0.18),
         buttonBg: const Color(0xffffffff),
         buttonText: AppColors.charcoal,
         swatchBorder: const Color(0xffffffff),

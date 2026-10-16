@@ -97,7 +97,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
       if (!mounted) return;
       setState(() {
         _state = _LoadState.error;
-        _errorMessage = 'อ่านสีจากภาพไม่สำเร็จ ลองใหม่อีกครั้ง';
+        _errorMessage = 'Failed to read the photo. Please try again.';
       });
     }
   }
@@ -165,9 +165,9 @@ class _ClothingScreenState extends State<ClothingScreen> {
   // smallest perceptual (Lab) distance — that's "closest" and "why". ----
   _OutfitMatch _matchAgainstSeason(Color color) {
     final candidates = <MapEntry<String, SwatchItem>>[
-      for (final s in _profile.topsPool) MapEntry('เสื้อผ้า', s),
-      for (final s in _profile.bottoms) MapEntry('เสื้อผ้า', s),
-      for (final s in _profile.jewelry) MapEntry('เครื่องประดับ', s),
+      for (final s in _profile.topsPool) MapEntry('Clothing', s),
+      for (final s in _profile.bottoms) MapEntry('Bottoms', s),
+      for (final s in _profile.jewelry) MapEntry('Jewelry', s),
     ];
 
     double bestDist = double.infinity;
@@ -364,7 +364,7 @@ class _ClothingScreenState extends State<ClothingScreen> {
     );
   }
 
-Widget _buildIdleHint() {
+  Widget _buildIdleHint() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -12,6 +12,8 @@ import '../theme/app_theme.dart';
 import 'questionnaire_screen.dart';
 import 'processing_screen.dart';
 
+import 'dart:typed_data';
+
 enum _Guidance {
   initializing,
   noFace,
@@ -47,6 +49,8 @@ class _CameraScreenState extends State<CameraScreen>
   int _cameraIndex = 0;
 
   bool _isDetecting = false;
+  int _frameCount = 0;
+  bool _loggedInputFormat = false;
   bool _capturing = false;
   bool _permissionDenied = false;
   bool _torchOn = false;
@@ -149,7 +153,7 @@ class _CameraScreenState extends State<CameraScreen>
 
   //Face guide oval
   static const double _ovalWidthFraction = 0.55; // width
-  static const double _ovalAspect = 0.86; // height
+  static const double _ovalAspect = 0.85; // height
 
   @override
   void initState() {
@@ -368,19 +372,37 @@ class _CameraScreenState extends State<CameraScreen>
         lightIssue = _Guidance.tooBright;
       }
 
+      _frameCount++;
+      if (_frameCount == 1 || _frameCount % 30 == 0) {
+        debugPrint(
+          '[SeasonMe camera] frame #$_frameCount: '
+          '${image.width}x${image.height}, format=${image.format.raw}, '
+          'planes=${image.planes.length}, brightness=${brightness.toStringAsFixed(1)}',
+        );
+      }
+
       final inputImage = _toInputImage(image, controller);
       _Guidance next;
       if (inputImage == null) {
+        if (!_loggedInputFormat) {
+          _loggedInputFormat = true;
+          debugPrint(
+            '[SeasonMe camera] Cannot convert camera frame to ML Kit InputImage. '
+            'Check image format and plane count above.',
+          );
+        }
         next = lightIssue ?? _Guidance.noFace;
       } else {
         final faces = await _faceDetector!.processImage(inputImage);
-        debugPrint('[SeasonMe camera] faces detected: ${faces.length}');
+        if (_frameCount == 1 || _frameCount % 15 == 0) {
+          debugPrint('[SeasonMe camera] faces detected: ${faces.length}');
+        }
         if (lightIssue != null) {
           next = lightIssue;
         } else if (faces.isEmpty) {
           next = _Guidance.noFace;
         } else {
-          next = _evaluateFacePosition(faces.first, image);
+          next = _evaluateFacePosition(faces.first, image, controller);
         }
       }
 
@@ -392,6 +414,9 @@ class _CameraScreenState extends State<CameraScreen>
       }
     } catch (error, stack) {
       debugPrint('[SeasonMe camera] face frame failed: $error\n$stack');
+      if (mounted && !_disposed && generation == _generation) {
+        setState(() => _guidance = _Guidance.noFace);
+      }
     } finally {
       _isDetecting = false;
     }
@@ -418,27 +443,102 @@ class _CameraScreenState extends State<CameraScreen>
         InputImageRotation.rotation0deg;
 
     if (Platform.isAndroid) {
-      if (image.planes.length != 1) return null;
-      final format = InputImageFormatValue.fromRawValue(image.format.raw);
-      if (format == null) return null;
-      final plane = image.planes.first;
-      return InputImage.fromBytes(
-        bytes: plane.bytes,
-        metadata: InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: rotation,
-          format: format,
-          bytesPerRow: plane.bytesPerRow,
-        ),
+      final width = image.width;
+      final height = image.height;
+
+      // Case 1: Android already provides a single NV21 plane.
+      if (image.planes.length == 1) {
+        final format = InputImageFormatValue.fromRawValue(image.format.raw);
+
+        if (format != InputImageFormat.nv21) {
+          debugPrint(
+            '[SeasonMe camera] Unsupported single-plane format: '
+            '${image.format.raw}',
+          );
+          return null;
+        }
+
+        final plane = image.planes.first;
+
+        return InputImage.fromBytes(
+          bytes: plane.bytes,
+          metadata: InputImageMetadata(
+            size: Size(width.toDouble(), height.toDouble()),
+            rotation: rotation,
+            format: InputImageFormat.nv21,
+            bytesPerRow: plane.bytesPerRow,
+          ),
+        );
+      }
+
+      // Case 2: Android provides YUV_420_888 as three planes.
+      if (image.planes.length == 3) {
+        final yPlane = image.planes[0];
+        final uPlane = image.planes[1];
+        final vPlane = image.planes[2];
+
+        final ySize = width * height;
+        final nv21 = Uint8List(ySize + (ySize ~/ 2));
+
+        // Copy the Y (brightness) plane, respecting row/pixel strides.
+        for (int row = 0; row < height; row++) {
+          for (int col = 0; col < width; col++) {
+            final sourceIndex =
+                row * yPlane.bytesPerRow + col * (yPlane.bytesPerPixel ?? 1);
+
+            nv21[row * width + col] = yPlane.bytes[sourceIndex];
+          }
+        }
+
+        // NV21 stores chroma in VU order.
+        final chromaHeight = height ~/ 2;
+        final chromaWidth = width ~/ 2;
+
+        for (int row = 0; row < chromaHeight; row++) {
+          for (int col = 0; col < chromaWidth; col++) {
+            final uIndex =
+                row * uPlane.bytesPerRow + col * (uPlane.bytesPerPixel ?? 1);
+
+            final vIndex =
+                row * vPlane.bytesPerRow + col * (vPlane.bytesPerPixel ?? 1);
+
+            final targetIndex = ySize + row * width + col * 2;
+
+            if (targetIndex + 1 < nv21.length) {
+              nv21[targetIndex] = vPlane.bytes[vIndex];
+              nv21[targetIndex + 1] = uPlane.bytes[uIndex];
+            }
+          }
+        }
+
+        return InputImage.fromBytes(
+          bytes: nv21,
+          metadata: InputImageMetadata(
+            size: Size(width.toDouble(), height.toDouble()),
+            rotation: rotation,
+            format: InputImageFormat.nv21,
+            bytesPerRow: width,
+          ),
+        );
+      }
+
+      debugPrint(
+        '[SeasonMe camera] Unsupported plane count: '
+        '${image.planes.length}, format=${image.format.raw}',
       );
+      return null;
     }
 
-    // iOS and other platforms
+    // iOS and other platforms: preserve the existing conversion behavior.
+    if (image.planes.isEmpty) return null;
+
     final buffer = WriteBuffer();
     for (final plane in image.planes) {
       buffer.putUint8List(plane.bytes);
     }
+
     final bytes = buffer.done().buffer.asUint8List();
+
     return InputImage.fromBytes(
       bytes: bytes,
       metadata: InputImageMetadata(
@@ -450,27 +550,50 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
-  _Guidance _evaluateFacePosition(Face face, CameraImage image) {
+  // ML Kit returns face coordinates in the image's upright orientation.
+  // CameraImage dimensions may still be in sensor orientation, so swap the
+  // dimensions when the sensor rotation is 90/270 degrees.
+  _Guidance _evaluateFacePosition(
+    Face face,
+    CameraImage image,
+    CameraController controller,
+  ) {
     final box = face.boundingBox;
-    final imgW = image.width.toDouble();
-    final imgH = image.height.toDouble();
+    final rotation = controller.description.sensorOrientation;
+    final rotated = rotation == 90 || rotation == 270;
+    final uprightWidth = (rotated ? image.height : image.width).toDouble();
+    final uprightHeight = (rotated ? image.width : image.height).toDouble();
 
-    final dx = (box.left + box.width / 2 - imgW / 2) / imgW;
-    final dy = (box.top + box.height / 2 - imgH / 2) / imgH;
+    if (uprightWidth <= 0 || uprightHeight <= 0) return _Guidance.noFace;
 
-    const centerTolerance = 0.12;
-    if (dx.abs() > centerTolerance || dy.abs() > centerTolerance) {
-      if (dx.abs() >= dy.abs()) {
-        return dx > 0 ? _Guidance.moveLeft : _Guidance.moveRight;
+    final faceCenterX = box.left + box.width / 2;
+    final faceCenterY = box.top + box.height / 2;
+
+    // The oval is drawn slightly above the screen's vertical center (42%).
+    // Use forgiving thresholds because the preview is cropped/scaled to fit.
+    final dx = (faceCenterX - uprightWidth * 0.5) / uprightWidth;
+    final targetY = uprightHeight * 0.42;
+    final dy = (faceCenterY - targetY) / uprightHeight;
+
+    const horizontalTolerance = 0.17;
+    const verticalTolerance = 0.19;
+
+    if (dx.abs() > horizontalTolerance) {
+      // The front preview is mirrored, so invert the on-screen instruction.
+      final isFront =
+          controller.description.lensDirection == CameraLensDirection.front;
+      if (isFront) {
+        return dx > 0 ? _Guidance.moveRight : _Guidance.moveLeft;
       }
-      return _Guidance.centerFace;
+      return dx > 0 ? _Guidance.moveLeft : _Guidance.moveRight;
     }
 
-    final faceWidthFraction = box.width / imgW;
-    if (faceWidthFraction < 0.32) return _Guidance.moveCloser;
-    if (faceWidthFraction > 0.68) return _Guidance.moveBack;
+    if (dy.abs() > verticalTolerance) return _Guidance.centerFace;
 
-    // print(face.boundingBox);
+    final faceWidthFraction = box.width / uprightWidth;
+    if (faceWidthFraction < 0.25) return _Guidance.moveCloser;
+    if (faceWidthFraction > 0.72) return _Guidance.moveBack;
+
     return _Guidance.ready;
   }
 

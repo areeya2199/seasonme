@@ -45,11 +45,10 @@ Finder _compactTile(int group, int index) => find
     )
     .at(index);
 
-Finder _beautyTiles() => find.byWidgetPredicate((widget) {
-  return widget is GestureDetector &&
-      widget.child is SizedBox &&
-      (widget.child! as SizedBox).width == 64;
-});
+Finder _beautyTiles() => find.descendant(
+  of: _compactWraps(),
+  matching: find.byType(GestureDetector),
+);
 
 BoxDecoration _tileDecoration(WidgetTester tester, Finder finder) {
   final child = tester.widget<GestureDetector>(finder).child!;
@@ -87,16 +86,8 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _tapBeauty(WidgetTester tester, int index) => _tap(
-  tester,
-  // The wrapper center can fall in the gap between the color and its label.
-  find
-      .descendant(
-        of: _beautyTiles().at(index),
-        matching: find.byType(Container),
-      )
-      .first,
-);
+Future<void> _tapBeauty(WidgetTester tester, int index) =>
+    _tap(tester, _beautyTiles().at(index));
 
 Future<void> _showResult(
   WidgetTester tester,
@@ -146,6 +137,28 @@ Future<void> _occasion(WidgetTester tester, String label) async {
 }
 
 void main() {
+  testWidgets(
+    'beauty popup exposes the selected name and HEX and clears on toggle',
+    (tester) async {
+      await _showResult(tester, SeasonKey.Winter);
+      await _tap(tester, find.text('Beauty & Jewelry'));
+      final color = _beautySwatches(tester).first;
+      final item = SeasonPaletteData.getProfile(
+        SeasonKey.Winter,
+      ).hair.firstWhere((item) => item.color == color);
+      final hex =
+          '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
+      await _tapBeauty(tester, 0);
+      expect(find.text(item.name), findsOneWidget);
+      expect(find.text(hex), findsOneWidget);
+      await _tapBeauty(tester, 0);
+      expect(find.text(item.name), findsNothing);
+      expect(find.text(hex), findsNothing);
+      expect(_beauty(tester).hair, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'all nine bundled preview layers decode with matching dimensions',
     (tester) async {
