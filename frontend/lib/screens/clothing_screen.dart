@@ -16,7 +16,7 @@ import '../utils/color_utils.dart';
 // No manual color picking: the photo is the only input.
 class ClothingScreen extends StatefulWidget {
   final SeasonKey season;
-  const ClothingScreen({super.key, this.season = SeasonKey.Autumn});
+  const ClothingScreen({super.key, required this.season});
 
   @override
   State<ClothingScreen> createState() => _ClothingScreenState();

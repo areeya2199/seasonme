@@ -23,6 +23,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<AnalysisHistoryEntry> _history = [];
   bool _loadingHistory = true;
+  bool _historyRequestInFlight = false;
+  bool _openingRoute = false;
+  String? _historyError;
 
   @override
   void initState() {
@@ -31,22 +34,97 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadHistory() async {
-    final history = await AnalysisHistoryService.getAll();
-    if (!mounted) return;
+    if (_historyRequestInFlight) return;
+    _historyRequestInFlight = true;
     setState(() {
-      _history = history;
-      _loadingHistory = false;
+      _loadingHistory = true;
+      _historyError = null;
     });
+    try {
+      final history = await AnalysisHistoryService.getAll();
+      if (!mounted) return;
+      setState(() => _history = history);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _history = [];
+        _historyError = 'Could not load analysis history. Please try again.';
+      });
+    } finally {
+      _historyRequestInFlight = false;
+      if (mounted) setState(() => _loadingHistory = false);
+    }
+  }
+
+  Future<void> _openAndRefresh(Widget screen) async {
+    if (_openingRoute || _loadingHistory) return;
+    _openingRoute = true;
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(builder: (_) => screen),
+      );
+      if (mounted) await _loadHistory();
+    } finally {
+      _openingRoute = false;
+    }
+  }
+
+  Future<void> _openClothing() async {
+    if (_openingRoute || _loadingHistory) return;
+    _openingRoute = true;
+    setState(() {
+      _loadingHistory = true;
+      _historyError = null;
+    });
+    try {
+      final latest = await AnalysisHistoryService.getLatestFromServer();
+      if (!mounted) return;
+      setState(() {
+        // Home displays only the latest entry. Do not reuse the old snapshot.
+        _history = latest == null ? [] : [latest];
+        _loadingHistory = false;
+      });
+      if (latest == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please analyze your personal color first.'),
+          ),
+        );
+        return;
+      }
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ClothingScreen(season: latest.season),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _history = [];
+        _historyError = 'Could not confirm your latest analysis. Please retry.';
+      });
+    } finally {
+      _openingRoute = false;
+      if (mounted) setState(() => _loadingHistory = false);
+    }
   }
 
   Future<void> _startAnalysis() async {
-    await showFacePhotoGuide(context);
-    if (!mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SelectScreen()),
-    );
-    if (mounted) _loadHistory();
+    if (_openingRoute || _loadingHistory) return;
+    _openingRoute = true;
+    try {
+      await showFacePhotoGuide(context);
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(builder: (_) => const SelectScreen()),
+      );
+      if (mounted) await _loadHistory();
+    } finally {
+      _openingRoute = false;
+    }
   }
 
   @override
@@ -54,6 +132,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_loadingHistory) {
       return const GradientScaffold(
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_historyError != null) {
+      return GradientScaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_historyError!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _loadHistory,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
     return _history.isEmpty
@@ -79,10 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfileScreen()),
-          ),
+          onTap: () => _openAndRefresh(const ProfileScreen()),
           // profile photo
           child: CircleAvatar(
             radius: 20,
@@ -235,15 +330,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ResultScreen(
-                            season: latest.season,
-                            analysis: latest.analysis,
-                            recordToHistory: false,
-                            localImageKey: latest.localImageKey,
-                          ),
+                      onPressed: () => _openAndRefresh(
+                        ResultScreen(
+                          season: latest.season,
+                          analysis: latest.analysis,
+                          recordToHistory: false,
+                          localImageKey: latest.localImageKey,
                         ),
                       ),
                       icon: const Icon(Icons.arrow_forward, size: 18),
@@ -262,8 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ---- "Check Your Outfit" card — compares against the SAME
-            // season shown above (latest.season) ----
+            // Confirm the latest saved season when opening the outfit checker.
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -325,12 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ClothingScreen(season: latest.season),
-                        ),
-                      ),
+                      onPressed: _openClothing,
                       icon: const Icon(Icons.arrow_forward, size: 18),
                       label: const Text(
                         'Check Your Outfit',
@@ -349,15 +435,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // ---- latest analysis row ----
             GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ResultScreen(
-                    season: latest.season,
-                    analysis: latest.analysis,
-                    recordToHistory: false,
-                    localImageKey: latest.localImageKey,
-                  ),
+              onTap: () => _openAndRefresh(
+                ResultScreen(
+                  season: latest.season,
+                  analysis: latest.analysis,
+                  recordToHistory: false,
+                  localImageKey: latest.localImageKey,
                 ),
               ),
               child: Row(
@@ -513,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Just a photo and a few quick questions.\nTap below to get started.',
+                    'Please analyze your personal color first.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,

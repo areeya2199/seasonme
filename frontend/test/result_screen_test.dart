@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/data/season_palette.dart';
+import 'package:frontend/screens/clothing_screen.dart';
 import 'package:frontend/screens/result_screen.dart';
 import 'package:frontend/services/analysis_history.dart';
 import 'package:frontend/theme/season_card_colors.dart';
@@ -83,6 +84,36 @@ void main() {
     expect(entry('analysis_entry2.png').localImageKey, isNull);
     expect(entry(null).localImageKey, isNull);
     expect(entry(42).localImageKey, isNull);
+  });
+
+  test('history accepts recognized seasons without inventing a fallback', () {
+    for (final season in SeasonKey.values) {
+      for (final value in [season.name, ' ${season.name.toUpperCase()} ']) {
+        final entry = AnalysisHistoryEntry.fromFirestore(
+          _HistoryDocument('valid', {'season': value}),
+        );
+        expect(entry.season, season);
+      }
+    }
+  });
+
+  test('history rejects missing and invalid seasons', () {
+    for (final data in <Map<String, dynamic>>[
+      {},
+      {'season': null},
+      {'season': ''},
+      {'season': '   '},
+      {'season': 'unknown'},
+      {'season': 42},
+      {'season': false},
+      {'season': <String>[]},
+      {'season': <String, dynamic>{}},
+    ]) {
+      expect(
+        () => AnalysisHistoryEntry.fromFirestore(_HistoryDocument('bad', data)),
+        throwsFormatException,
+      );
+    }
   });
 
   Future<void> showResult(
@@ -252,6 +283,40 @@ void main() {
   });
 
   for (final season in SeasonKey.values) {
+    testWidgets(
+      '$season result opens Clothing with the selected history season',
+      (tester) async {
+        final selected = AnalysisHistoryEntry.fromFirestore(
+          _HistoryDocument('selected-history', {'season': season.name}),
+        );
+        await showResult(tester, selected.season, analysis: selected.analysis);
+        final button = find.text('Check an Outfit');
+        await tester.ensureVisible(button);
+        await tester.pumpAndSettle();
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+
+        final clothing = tester.widget<ClothingScreen>(
+          find.byType(ClothingScreen),
+        );
+        expect(clothing.season, selected.season);
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is RichText &&
+                widget.text.toPlainText() ==
+                    'Based on your season ${season.name}',
+          ),
+          findsOneWidget,
+        );
+        final result = tester.widget<ResultScreen>(
+          find.byType(ResultScreen, skipOffstage: false),
+        );
+        expect(result.recordToHistory, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('$season keeps its text and tags without a photo', (
       tester,
     ) async {

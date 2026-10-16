@@ -24,6 +24,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<AnalysisHistoryEntry> _history = [];
   bool _loadingHistory = true;
+  bool _historyRequestInFlight = false;
+  bool _openingHistory = false;
+  String? _historyError;
 
   @override
   void initState() {
@@ -32,12 +35,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadHistory() async {
-    final history = await AnalysisHistoryService.getAll();
-    if (!mounted) return;
+    if (_historyRequestInFlight) return;
+    _historyRequestInFlight = true;
     setState(() {
-      _history = history;
-      _loadingHistory = false;
+      _loadingHistory = true;
+      _historyError = null;
     });
+    try {
+      final history = await AnalysisHistoryService.getAll();
+      if (!mounted) return;
+      setState(() => _history = history);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _history = [];
+        _historyError = 'Could not load analysis history. Please try again.';
+      });
+    } finally {
+      _historyRequestInFlight = false;
+      if (mounted) setState(() => _loadingHistory = false);
+    }
   }
 
   Future<void> _editName(String currentName) async {
@@ -70,14 +87,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _openFullHistory() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            _FullHistoryScreen(history: _history, onChanged: _loadHistory),
-      ),
-    );
+  Future<void> _openFullHistory() async {
+    if (_loadingHistory || _historyError != null || _openingHistory) return;
+    _openingHistory = true;
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              _FullHistoryScreen(history: _history, onChanged: _loadHistory),
+        ),
+      );
+    } finally {
+      _openingHistory = false;
+    }
   }
 
   void _openHelp() {
@@ -273,7 +296,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 20),
 
-            if (!_loadingHistory) _buildSeasonCard(latest),
+            if (_loadingHistory)
+              const Center(child: CircularProgressIndicator())
+            else if (_historyError != null)
+              Column(
+                children: [
+                  Text(_historyError!),
+                  TextButton(
+                    onPressed: _loadHistory,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              )
+            else
+              _buildSeasonCard(latest),
 
             const SizedBox(height: 24),
             _ProfileTile(

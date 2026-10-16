@@ -67,7 +67,7 @@ def _calculate_questionnaire_scores(answers):
         warm_score += warm_points
         cool_score += cool_points
         answered_count += 1
-    #หาคะแนนเฉลี่ยของคำตอบที่ตอบแล้วถ้าไม่ตอบให้ค่าเท่ากนทั้ง2ฝั่ง
+    
     if answered_count == 0:
         warm_question = 0.5
         cool_question = 0.5
@@ -75,7 +75,7 @@ def _calculate_questionnaire_scores(answers):
         warm_question = warm_score / answered_count
         cool_question = cool_score / answered_count
 
-    #คิด
+    
     questionnaire_weight = 0.30 * (answered_count / 3)
     image_weight = 1.0 - questionnaire_weight
 
@@ -174,13 +174,12 @@ def analyze_skin(image, answers):
     right_points_np = np.array(right_points)
 
 
-    # สร้าง mask สำหรับแก้มซ้ายและขวา
+
     mask = np.zeros(
         (height, width),
         dtype=np.uint8
     )
 
-    #เติมพื้นที่ใน mask สำหรับแก้มซ้ายและขวา
     cv2.fillPoly(
         mask,
         [left_points_np],
@@ -252,14 +251,12 @@ def analyze_skin(image, answers):
         chroma_group = "Low"
 
     # Hue angle
-
     hue_angle = math.degrees(
         math.atan2(
             b_star,
             a_star
         )
     )
-
 
     if hue_angle < 0:
         hue_angle += 360
@@ -269,7 +266,6 @@ def analyze_skin(image, answers):
 
     questionnaire = _calculate_questionnaire_scores(answers)
 
-    
     if hue_angle > 60:
         image_warm = 1
         image_cool = 0

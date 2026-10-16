@@ -28,11 +28,17 @@ class AnalysisHistoryEntry {
     final json = document.data();
     final timestamp = json['analyzedAt'];
     final localImageKey = json['localImageKey'];
+    final seasonName = json['season'];
+    final normalizedSeason = seasonName is String
+        ? seasonName.trim().toLowerCase()
+        : null;
     return AnalysisHistoryEntry(
       id: document.id,
       season: SeasonKey.values.firstWhere(
-        (s) => s.name == json['season'],
-        orElse: () => SeasonKey.Autumn,
+        (s) => s.name.toLowerCase() == normalizedSeason,
+        orElse: () => throw FormatException(
+          'Invalid season in analysis history entry ${document.id}',
+        ),
       ),
       analyzedAt: timestamp is Timestamp ? timestamp.toDate() : DateTime.now(),
       analysis: json,
@@ -61,13 +67,41 @@ class AnalysisHistoryService {
   }
 
   static Future<List<AnalysisHistoryEntry>> getAll() async {
+    final uid = _user?.uid;
     final collection = _collection;
-    if (collection == null) return [];
+    if (collection == null || uid == null) {
+      throw StateError('Sign in before loading analysis history');
+    }
 
     final snapshot = await collection
         .orderBy('analyzedAt', descending: true)
         .get();
+    _checkUser(uid);
     return snapshot.docs.map(AnalysisHistoryEntry.fromFirestore).toList();
+  }
+
+  // Only Home's outfit action needs server confirmation. Other history reads
+  // keep Firestore's normal server/cache behavior.
+  static Future<AnalysisHistoryEntry?> getLatestFromServer() async {
+    final uid = _user?.uid;
+    final collection = _collection;
+    if (collection == null || uid == null) {
+      throw StateError('Sign in before loading analysis history');
+    }
+    final snapshot = await collection
+        .orderBy('analyzedAt', descending: true)
+        .limit(1)
+        .get(const GetOptions(source: Source.server));
+    _checkUser(uid);
+    return snapshot.docs.isEmpty
+        ? null
+        : AnalysisHistoryEntry.fromFirestore(snapshot.docs.first);
+  }
+
+  static void _checkUser(String uid) {
+    if (_user?.uid != uid) {
+      throw StateError('The signed-in account changed while loading history');
+    }
   }
 
   static Future<void> addEntry({
