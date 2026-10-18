@@ -50,7 +50,7 @@ class BeautyPreviewCard extends StatelessWidget {
         children: [
           SizedBox(
             width: 100,
-            height: 190,
+            height: 130,
             child: Stack(
               fit: StackFit.expand,
               children: [

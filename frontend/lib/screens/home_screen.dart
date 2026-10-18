@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loadingHistory = true;
   bool _historyRequestInFlight = false;
   bool _openingRoute = false;
+  bool _openingClothing = false;
   String? _historyError;
 
   @override
@@ -74,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_openingRoute || _loadingHistory) return;
     _openingRoute = true;
     setState(() {
-      _loadingHistory = true;
+      _openingClothing = true;
       _historyError = null;
     });
     try {
@@ -83,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         // Home displays only the latest entry. Do not reuse the old snapshot.
         _history = latest == null ? [] : [latest];
-        _loadingHistory = false;
       });
       if (latest == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -107,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } finally {
       _openingRoute = false;
-      if (mounted) setState(() => _loadingHistory = false);
+      if (mounted) setState(() => _openingClothing = false);
     }
   }
 
@@ -291,8 +291,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         UndertoneUtils.label(latest.analysis, withSuffix: true),
                         cardText,
                       ),
-                      const SizedBox(width: 8),
-                      _pillTag(chroma, cardText),
+                      // const SizedBox(width: 8),
+                      // _pillTag(chroma, cardText),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -336,6 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           analysis: latest.analysis,
                           recordToHistory: false,
                           localImageKey: latest.localImageKey,
+                          historyEntry: latest,
                         ),
                       ),
                       icon: const Icon(Icons.arrow_forward, size: 18),
@@ -416,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      onPressed: _openClothing,
+                      onPressed: _openingClothing ? null : _openClothing,
                       icon: const Icon(Icons.arrow_forward, size: 18),
                       label: const Text(
                         'Check Your Outfit',
@@ -441,6 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   analysis: latest.analysis,
                   recordToHistory: false,
                   localImageKey: latest.localImageKey,
+                  historyEntry: latest,
                 ),
               ),
               child: Row(

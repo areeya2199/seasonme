@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Exact object path used by ImageStorageService.pathFor().
+    match /users/{uid}/analysisHistory/{historyId}/photo {
+      allow get, delete: if isOwner(uid)
+                         && historyId.matches('^[a-zA-Z0-9_-]+$');
+
+      allow create, update: if isOwner(uid)
+                            && historyId.matches('^[a-zA-Z0-9_-]+$')
+                            && request.resource.size > 0
+                            && request.resource.size <= 20 * 1024 * 1024
+                            && request.resource.contentType in [
+                              'image/jpeg', 'image/png', 'image/webp'
+                            ];
+    }
+
+    match /users/{uid}/savedOutfits/{outfitId}/photo {
+      allow get, delete: if isOwner(uid)
+                         && outfitId.matches('^[a-zA-Z0-9_-]+$');
+      allow create, update: if isOwner(uid)
+                            && outfitId.matches('^[a-zA-Z0-9_-]+$')
+                            && request.resource.size > 0
+                            && request.resource.size <= 20 * 1024 * 1024
+                            && request.resource.contentType in [
+                              'image/jpeg', 'image/png', 'image/webp'
+                            ];
+    }
+
+    // Includes list requests; the app reads a known path from Firestore.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

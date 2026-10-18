@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -27,6 +28,25 @@ class _HistoryDocument extends Fake
   Map<String, dynamic> data() => _data;
 }
 
+class _PhotoAccess implements HistoryPhotoAccess {
+  final changes = StreamController<String?>.broadcast();
+  String? uid = 'alice';
+  Future<Uint8List?> Function() read;
+  int retries = 0;
+  _PhotoAccess(this.read);
+  @override
+  String? get currentUid => uid;
+  @override
+  Stream<String?> get accountChanges => changes.stream;
+  @override
+  Future<Uint8List?> load(AnalysisHistoryEntry entry) => read();
+  @override
+  Future<bool> retry(AnalysisHistoryEntry entry) async {
+    retries++;
+    return true;
+  }
+}
+
 void main() {
   late Directory photoDirectory;
   late File photo;
@@ -38,6 +58,88 @@ void main() {
   });
 
   tearDownAll(() => photoDirectory.deleteSync(recursive: true));
+
+  Future<void> showCloudHistory(
+    WidgetTester tester,
+    _PhotoAccess access, {
+    String status = 'ready',
+  }) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ResultScreen(
+          season: SeasonKey.Winter,
+          recordToHistory: false,
+          historyPhotoAccess: access,
+          historyEntry: AnalysisHistoryEntry(
+            id: 'entry1',
+            season: SeasonKey.Winter,
+            analyzedAt: DateTime(2026),
+            analysis: const {'undertone': 'Cool'},
+            ownerUid: 'alice',
+            storagePath: 'users/alice/analysisHistory/entry1/photo',
+            photoStatus: status,
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets('cloud loading shows progress, reports failure and retries', (
+    tester,
+  ) async {
+    final gate = Completer<Uint8List?>();
+    final access = _PhotoAccess(() => gate.future);
+    addTearDown(access.changes.close);
+    await showCloudHistory(tester, access);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    gate.completeError(StateError('offline'));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry loading photo'), findsOneWidget);
+    access.read = () async => photo.readAsBytesSync();
+    await tester.tap(find.text('Retry loading photo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry loading photo'), findsNothing);
+    expect(
+      find.byWidgetPredicate((w) => w is Image && w.image is MemoryImage),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('pending photo can retry upload without adding history', (
+    tester,
+  ) async {
+    final access = _PhotoAccess(() async => photo.readAsBytesSync());
+    addTearDown(access.changes.close);
+    await showCloudHistory(tester, access, status: 'pending');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Retry photo upload'));
+    await tester.pumpAndSettle();
+    expect(access.retries, 1);
+    expect(find.text('Retry photo upload'), findsNothing);
+  });
+
+  testWidgets('account change discards an in-flight cloud photo', (
+    tester,
+  ) async {
+    final gate = Completer<Uint8List?>();
+    final access = _PhotoAccess(() => gate.future);
+    addTearDown(access.changes.close);
+    await showCloudHistory(tester, access);
+    access.uid = 'bob';
+    access.changes.add('bob');
+    await tester.pump();
+    gate.complete(photo.readAsBytesSync());
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Image && w.image is MemoryImage),
+      findsNothing,
+    );
+    expect(
+      find.text('Your account changed. Please reopen history.'),
+      findsOneWidget,
+    );
+  });
 
   test('undertone formats only recognized analysis values', () {
     for (final value in ['Warm', ' warm ', 'WARM UNDERTONE']) {
@@ -84,6 +186,46 @@ void main() {
     expect(entry('analysis_entry2.png').localImageKey, isNull);
     expect(entry(null).localImageKey, isNull);
     expect(entry(42).localImageKey, isNull);
+  });
+
+  test('cloud photo reference must match the owner and history ID', () {
+    AnalysisHistoryEntry entry(String path) =>
+        AnalysisHistoryEntry.fromFirestore(
+          _HistoryDocument('entry1', {
+            'season': 'Winter',
+            'schemaVersion': 2,
+            'photo': {'storagePath': path, 'status': 'failed'},
+          }),
+          ownerUid: 'alice',
+        );
+    expect(
+      entry('users/alice/analysisHistory/entry1/photo').storagePath,
+      'users/alice/analysisHistory/entry1/photo',
+    );
+    expect(entry('users/bob/analysisHistory/entry1/photo').storagePath, isNull);
+    expect(
+      entry('users/alice/analysisHistory/entry2/photo').storagePath,
+      isNull,
+    );
+    expect(
+      entry('users/alice/analysisHistory/entry1/photo').photoStatus,
+      'failed',
+    );
+  });
+
+  test('legacy history remains readable without cloud fields', () {
+    final entry = AnalysisHistoryEntry.fromFirestore(
+      _HistoryDocument('old', {
+        'season': 'Summer',
+        'localImageKey': 'analysis_old.png',
+        'undertone': 'Cool',
+      }),
+      ownerUid: 'alice',
+    );
+    expect(entry.localImageKey, 'analysis_old.png');
+    expect(entry.storagePath, isNull);
+    expect(entry.photoStatus, isNull);
+    expect(entry.analysis['undertone'], 'Cool');
   });
 
   test('history accepts recognized seasons without inventing a fallback', () {

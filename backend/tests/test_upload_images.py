@@ -22,7 +22,7 @@ class UploadImageOrientationTests(unittest.TestCase):
         self.assertTrue(encoded)
         original = jpeg.tobytes()
         decoded = cv2.imdecode(jpeg, cv2.IMREAD_COLOR)
-        answers = {"0": None, "1": "Silver", "2": None, "3": "Soft & muted"}
+        answers = {"0": None, "1": "Silver", "2": None, "3": "Muted"}
 
         with (
             tempfile.TemporaryDirectory(prefix="seasonme-upload-") as directory,

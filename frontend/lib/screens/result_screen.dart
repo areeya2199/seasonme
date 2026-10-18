@@ -1,14 +1,17 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../data/season_palette.dart';
 import '../data/occasion_palette.dart';
 import '../utils/color_utils.dart';
 import '../utils/undertone_utils.dart';
 import '../services/analysis_history.dart';
+import '../services/history_save_task.dart';
 import '../theme/app_theme.dart';
 import 'clothing_screen.dart';
 import 'select_screen.dart';
@@ -24,6 +27,8 @@ class ResultScreen extends StatefulWidget {
   // Local photo used immediately after processing; history uses localImageKey.
   final String? imagePath;
   final String? localImageKey;
+  final AnalysisHistoryEntry? historyEntry;
+  final HistoryPhotoAccess? historyPhotoAccess;
 
   const ResultScreen({
     super.key,
@@ -33,6 +38,8 @@ class ResultScreen extends StatefulWidget {
     this.questionnaireAnswers,
     this.imagePath,
     this.localImageKey,
+    this.historyEntry,
+    this.historyPhotoAccess,
   });
 
   @override
@@ -73,37 +80,189 @@ class _ResultScreenState extends State<ResultScreen> {
   late List<SwatchItem> _jewelry;
   Uint8List? _historyPhoto;
   Future<void>? _historySave;
+  HistorySaveTask? _saveTask;
+  StreamSubscription<String?>? _authSubscription;
+  late final HistoryPhotoAccess _photoAccess =
+      widget.historyPhotoAccess ?? FirebaseHistoryPhotoAccess();
+  bool _savingHistory = false;
+  bool _loadingPhoto = false;
+  bool _saveNeedsRetry = false;
+  bool _uploadNeedsRetry = false;
+  bool _accountChanged = false;
+  String? _saveMessage;
+  String? _photoMessage;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
-    if (widget.recordToHistory && widget.analysis != null) {
-      _historySave =
-          AnalysisHistoryService.addEntry(
-            season: widget.season,
-            analysis: widget.analysis!,
-            questionnaireAnswers: widget.questionnaireAnswers ?? const {},
-            imagePath: widget.imagePath,
-          ).catchError((Object error) {
-            debugPrint('Analysis history save failed: $error');
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Could not save analysis history.')),
-            );
-          });
+    final entry = widget.historyEntry;
+    if (entry != null || (widget.recordToHistory && widget.analysis != null)) {
+      final owner = entry?.ownerUid ?? FirebaseAuth.instance.currentUser?.uid;
+      _accountChanged = owner != _photoAccess.currentUid;
+      if (_accountChanged) {
+        _photoMessage = 'Your account changed. Please reopen history.';
+      }
+      _authSubscription = _photoAccess.accountChanges.listen((uid) {
+        if (!mounted || uid == owner) return;
+        setState(() {
+          _accountChanged = true;
+          _historyPhoto = null;
+          _photoMessage = 'Your account changed. Please reopen history.';
+          _saveMessage = null;
+          _saveNeedsRetry = false;
+          _uploadNeedsRetry = false;
+        });
+      });
     }
-    if (widget.imagePath == null && widget.localImageKey != null) {
+    if (widget.recordToHistory && widget.analysis != null) {
+      _historySave = _saveAnalysis();
+    }
+    _uploadNeedsRetry =
+        entry?.photoStatus == 'pending' || entry?.photoStatus == 'failed';
+    if (widget.imagePath == null &&
+        (entry != null || widget.localImageKey != null)) {
       _loadHistoryPhoto();
     }
   }
 
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _saveAnalysis() async {
+    if (_savingHistory || _accountChanged) return;
+    setState(() {
+      _savingHistory = true;
+      _saveNeedsRetry = false;
+      _saveMessage = null;
+    });
+    try {
+      _saveTask ??= AnalysisHistoryService.createSaveTask(
+        season: widget.season,
+        analysis: widget.analysis!,
+        questionnaireAnswers: widget.questionnaireAnswers ?? const {},
+        imagePath: widget.imagePath,
+      );
+      final ready = await _saveTask!.save();
+      if (!mounted || _accountChanged) return;
+      setState(() {
+        _saveNeedsRetry = !ready;
+        _saveMessage = ready
+            ? null
+            : 'Analysis saved. The photo could not be saved yet.';
+      });
+    } catch (_) {
+      if (!mounted || _accountChanged) return;
+      setState(() {
+        _saveNeedsRetry = true;
+        _saveMessage = 'Could not finish saving history. Please retry.';
+      });
+    } finally {
+      if (mounted) setState(() => _savingHistory = false);
+    }
+  }
+
   Future<void> _loadHistoryPhoto() async {
-    final key = widget.localImageKey;
-    if (key == null) return;
-    final bytes = await AnalysisHistoryService.loadPhoto(key);
-    if (!mounted || bytes == null) return;
-    setState(() => _historyPhoto = bytes);
+    if (_loadingPhoto || _accountChanged) return;
+    setState(() {
+      _loadingPhoto = true;
+      _photoMessage = null;
+    });
+    try {
+      final entry = widget.historyEntry;
+      final bytes = entry != null
+          ? await _photoAccess.load(entry)
+          : widget.localImageKey == null
+          ? null
+          : await AnalysisHistoryService.loadPhoto(widget.localImageKey!);
+      if (!mounted || _accountChanged) return;
+      setState(() {
+        _historyPhoto = bytes;
+        _photoMessage = bytes == null
+            ? 'No photo is available on this device.'
+            : null;
+      });
+    } catch (_) {
+      if (mounted && !_accountChanged) {
+        setState(
+          () =>
+              _photoMessage = 'Could not load the history photo. Please retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingPhoto = false);
+    }
+  }
+
+  Future<void> _retryUpload() async {
+    final entry = widget.historyEntry;
+    if (entry == null || _loadingPhoto || _accountChanged) return;
+    setState(() {
+      _loadingPhoto = true;
+      _photoMessage = null;
+    });
+    try {
+      final ready = await _photoAccess.retry(entry);
+      if (!mounted || _accountChanged) return;
+      setState(() => _uploadNeedsRetry = !ready);
+    } catch (_) {
+      if (mounted && !_accountChanged) {
+        setState(
+          () => _photoMessage =
+              'Photo retry failed. Try on the original device with an internet connection.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingPhoto = false);
+    }
+    if (mounted && !_accountChanged && !_uploadNeedsRetry) {
+      await _loadHistoryPhoto();
+    }
+  }
+
+  Widget _buildHistoryStatus() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_saveMessage != null)
+          Text(
+            _saveMessage!,
+            style: const TextStyle(fontSize: 12, color: AppColors.mid),
+          ),
+        if (_photoMessage != null)
+          Text(
+            _photoMessage!,
+            style: const TextStyle(fontSize: 12, color: AppColors.mid),
+          ),
+        if (_uploadNeedsRetry && !_accountChanged)
+          const Text(
+            'Analysis saved. Photo upload is incomplete.',
+            style: TextStyle(fontSize: 12, color: AppColors.mid),
+          ),
+        if (_saveNeedsRetry && !_accountChanged)
+          TextButton(
+            onPressed: _savingHistory
+                ? null
+                : () {
+                    _historySave = _saveAnalysis();
+                  },
+            child: const Text('Retry saving'),
+          ),
+        if (_uploadNeedsRetry && !_accountChanged)
+          TextButton(
+            onPressed: _loadingPhoto ? null : _retryUpload,
+            child: const Text('Retry photo upload'),
+          ),
+        if (_photoMessage != null && !_accountChanged)
+          TextButton(
+            onPressed: _loadingPhoto ? null : _loadHistoryPhoto,
+            child: const Text('Retry loading photo'),
+          ),
+      ],
+    );
   }
 
   void _loadProfile() {
@@ -303,10 +462,6 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chroma = ColorUtils.chromaLabel(
-      _profile.topsPool.map((s) => s.color).toList(),
-    );
-
     return GradientScaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -316,7 +471,8 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 12),
             _buildTopBar(),
             const SizedBox(height: 16),
-            _buildPersonalColorCard(chroma),
+            _buildPersonalColorCard(),
+            _buildHistoryStatus(),
             const SizedBox(height: 16),
             _buildDayNightToggle(),
             const SizedBox(height: 12),
@@ -422,8 +578,9 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _buildPersonalColorCard(String chroma) {
-    final details = _buildPersonalColorDetails(chroma);
+  // ไม่ต้องรับหรือส่ง chroma แล้ว เพราะการ์ดแสดงเฉพาะ undertone จากผลวิเคราะห์
+  Widget _buildPersonalColorCard() {
+    final details = _buildPersonalColorDetails();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -435,7 +592,11 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         borderRadius: BorderRadius.circular(26),
       ),
-      child: widget.imagePath == null && _historyPhoto == null
+      child:
+          _accountChanged ||
+              (widget.imagePath == null &&
+                  _historyPhoto == null &&
+                  !_loadingPhoto)
           ? details
           : LayoutBuilder(
               builder: (context, constraints) {
@@ -465,7 +626,7 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _buildPersonalColorDetails(String chroma) {
+  Widget _buildPersonalColorDetails() {
     // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
     final cardText = seasonCardText(widget.season);
     return Column(
@@ -492,6 +653,12 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
         ),
         const SizedBox(height: 6),
+        // อ่าน undertone จากผลวิเคราะห์ และแสดงใต้ชื่อฤดู
+        _pillTag(
+          UndertoneUtils.label(widget.analysis, withSuffix: true),
+          cardText,
+        ),
+        const SizedBox(height: 12),
         Text(
           _profile.description,
           style: TextStyle(
@@ -499,18 +666,6 @@ class _ResultScreenState extends State<ResultScreen> {
             fontWeight: FontWeight.normal,
             color: cardText.body,
           ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _pillTag(
-              UndertoneUtils.label(widget.analysis, withSuffix: true),
-              cardText,
-            ),
-            _pillTag(chroma, cardText),
-          ],
         ),
       ],
     );
@@ -524,9 +679,30 @@ class _ResultScreenState extends State<ResultScreen> {
   static const double _photoHeight = 140;
 
   Widget _buildUserPhoto() {
+    if (_accountChanged) return const SizedBox.shrink();
     final path = widget.imagePath;
     final bytes = _historyPhoto;
-    if (path == null && bytes == null) return const SizedBox.shrink();
+    if (path == null && bytes == null) {
+      if (!_loadingPhoto) return const SizedBox.shrink();
+      return Container(
+        width: _photoWidth,
+        height: _photoHeight,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.cream,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.gold,
+            semanticsLabel: 'Loading history photo',
+          ),
+        ),
+      );
+    }
     final fallback = Container(
       color: AppColors.cream,
       alignment: Alignment.center,
@@ -733,7 +909,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Widget _buildWardrobeTab() {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           flex: 3,

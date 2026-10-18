@@ -44,6 +44,7 @@ dependencies:
   firebase_auth: ^5.7.0
   firebase_core: ^3.0.0
   cloud_firestore: ^5.6.12
+  firebase_storage: 12.4.10
   path_provider: ^2.1.5
   google_sign_in: ^6.2.1
   flutter_facebook_auth: ^7.1.6
@@ -115,6 +116,13 @@ flutter:
         - assets/preview_mannequin_base.png
         - assets/preview_mannequin_shirt.png
         - assets/preview_mannequin_skirt.png
+        - assets/blue.jpg
+        - assets/green.jpg
+        - assets/mix_blue&green.jpg
+        - assets/gold.jpg
+        - assets/silver.jpg
+        - assets/burn.jpg
+        - assets/tan.jpg
 
   fonts:
     - family: Lora 

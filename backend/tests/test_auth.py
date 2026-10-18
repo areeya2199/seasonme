@@ -44,7 +44,7 @@ class AuthenticationTests(unittest.TestCase):
             "/analyze",
             headers=headers,
             files={"file": ("face.jpg", b"image-bytes", "image/jpeg")},
-            data={"answers": json.dumps({"1": "Silver"})},
+            data={"answers": json.dumps({"1": "Silver", "3": "Muted"})},
         )
 
     def assert_blocked(self, response, status=401):
@@ -89,7 +89,7 @@ class AuthenticationTests(unittest.TestCase):
         self.analysis.assert_called_once()
         self.assertEqual(
             self.analysis.call_args.args[1],
-            {"0": None, "1": "Silver", "2": None, "3": None},
+            {"0": None, "1": "Silver", "2": None, "3": "Muted"},
         )
 
     def test_valid_token_still_enforces_answer_validation(self):

@@ -8,6 +8,7 @@ import '../data/season_palette.dart';
 import '../utils/color_utils.dart';
 import '../utils/undertone_utils.dart';
 import 'result_screen.dart';
+import 'saved_outfits_screen.dart';
 import '../theme/season_card_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -203,7 +204,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 20),
             GestureDetector(
-              onTap: () => _editName(displayName),
               child: Stack(
                 children: [
                   Container(
@@ -248,22 +248,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                   ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: AppColors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        size: 14,
-                        color: AppColors.charcoal,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -283,14 +267,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: const TextStyle(fontSize: 12, color: AppColors.mid),
             ),
             const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () => _editName(displayName),
-              child: const Text(
-                'Edit Name',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.blush,
+            // Keep the original spacing without exposing the edit control.
+            Visibility(
+              visible: false,
+              maintainSize: true,
+              maintainAnimation: true,
+              maintainState: true,
+              child: GestureDetector(
+                onTap: () => _editName(displayName),
+                child: const Text(
+                  'Edit Name',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.blush,
+                  ),
                 ),
               ),
             ),
@@ -316,6 +307,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: Icons.access_time,
               label: 'Full Analysis History',
               onTap: _openFullHistory,
+            ),
+
+            _ProfileTile(
+              icon: Icons.bookmark_outline,
+              label: 'Saved Outfits',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const SavedOutfitsScreen(),
+                ),
+              ),
             ),
 
             _ProfileTile(
@@ -402,9 +404,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
     final profile = SeasonPaletteData.getProfile(latest.season);
-    final chroma = ColorUtils.chromaLabel(
-      profile.topsPool.map((s) => s.color).toList(),
-    );
+    // final chroma = ColorUtils.chromaLabel(
+    //   profile.topsPool.map((s) => s.color).toList(),
+    //);
 
     // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
     final cardText = seasonCardText(latest.season);
@@ -417,6 +419,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             analysis: latest.analysis,
             recordToHistory: false,
             localImageKey: latest.localImageKey,
+            historyEntry: latest,
           ),
         ),
       ),
@@ -468,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '${UndertoneUtils.label(latest.analysis)} · $chroma',
+                    UndertoneUtils.label(latest.analysis, withSuffix: true),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -511,10 +514,42 @@ class _FullHistoryScreen extends StatefulWidget {
 
 class _FullHistoryScreenState extends State<_FullHistoryScreen> {
   late List<AnalysisHistoryEntry> _items = List.of(widget.history);
+  bool _removing = false;
 
   Future<void> _remove(int index) async {
+    if (_removing) return;
+    _removing = true;
     final item = _items[index];
     try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppColors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'Remove analysis history?',
+            style: TextStyle(fontFamily: 'Lora', fontSize: 21),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFA43E37),
+                foregroundColor: AppColors.white,
+                minimumSize: const Size(80, 48),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
       await AnalysisHistoryService.remove(item.id);
       if (!mounted) return;
       setState(() => _items.removeWhere((entry) => entry.id == item.id));
@@ -524,6 +559,8 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not delete analysis history.')),
       );
+    } finally {
+      _removing = false;
     }
   }
 
@@ -594,6 +631,7 @@ class _FullHistoryScreenState extends State<_FullHistoryScreen> {
                                   analysis: item.analysis,
                                   recordToHistory: false,
                                   localImageKey: item.localImageKey,
+                                  historyEntry: item,
                                 ),
                               ),
                             ),

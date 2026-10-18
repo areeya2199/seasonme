@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../data/season_palette.dart';
 import '../services/api_service.dart';
+import '../services/analysis_input.dart';
 import '../theme/app_theme.dart';
 import 'result_screen.dart';
 
@@ -39,6 +40,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         return null;
       }
       return await ApiService().analyzeImage(imagePath, widget.answers);
+    } on AnalysisInputException catch (e) {
+      if (!mounted) return null;
+      _analysisError = e.message;
     } on TimeoutException catch (e) {
       print(e);
       if (!mounted) return null;

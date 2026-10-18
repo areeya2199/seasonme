@@ -17,7 +17,7 @@ ALLOWED_ANSWERS = {
         "Burns easily, rarely tans",
         "A little of both",
     },
-    "3": {"Bright & vivid", "Soft & muted", "Deep & rich"},
+    "3": {"Bright", "Muted"},
 }
 
 
@@ -46,6 +46,11 @@ def parse_answers(raw_answers: str):
     normalized = {}
     for key, allowed_values in ALLOWED_ANSWERS.items():
         value = parsed.get(key)
+        if key == "3" and value is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Answer 3 is required: choose Bright or Muted",
+            )
         if value is not None and not isinstance(value, str):
             raise HTTPException(
                 status_code=422,

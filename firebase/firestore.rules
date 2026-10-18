@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User-provided production baseline, preserved without expanding access.
+    match /users/{userId}/analysisHistory/{historyId} {
+      allow read, create, update, delete: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/savedOutfits/{outfitId} {
+      function owner() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+      function safeId() {
+        return outfitId.matches('^[a-zA-Z0-9_-]+$');
+      }
+      function valid(data) {
+        return data.keys().hasAll([
+          'schemaVersion', 'season', 'matchPercent', 'matchLevel',
+          'sampledColorArgb', 'closestColor', 'imageHash',
+          'matchAlgorithmVersion', 'storagePath', 'savedAt', 'status'
+        ]) && data.keys().hasOnly([
+          'schemaVersion', 'season', 'matchPercent', 'matchLevel',
+          'sampledColorArgb', 'closestColor', 'imageHash',
+          'matchAlgorithmVersion', 'storagePath', 'savedAt', 'status', 'note'
+        ])
+        && (!data.keys().hasAny(['note'])
+          || (data.note is string && data.note.matches('(?s)^.{0,100}$')))
+        && data.schemaVersion is int && data.schemaVersion == 1
+        && data.matchAlgorithmVersion is int && data.matchAlgorithmVersion == 1
+        && data.season in ['Winter', 'Spring', 'Autumn', 'Summer']
+        && data.matchPercent is int && data.matchPercent >= 45 && data.matchPercent <= 100
+        && ((data.matchLevel == 'good' && data.matchPercent < 75)
+          || (data.matchLevel == 'excellent' && data.matchPercent >= 75))
+        && data.sampledColorArgb is int
+        && data.sampledColorArgb >= 0 && data.sampledColorArgb <= 4294967295
+        && data.closestColor is map
+        && data.closestColor.keys().hasAll(['name', 'argb', 'category'])
+        && data.closestColor.keys().hasOnly(['name', 'argb', 'category'])
+        && data.closestColor.name is string
+        && data.closestColor.name.size() > 0 && data.closestColor.name.size() <= 120
+        && data.closestColor.argb is int
+        && data.closestColor.argb >= 0 && data.closestColor.argb <= 4294967295
+        && data.closestColor.category in ['Clothing', 'Bottoms', 'Jewelry']
+        && data.imageHash is string && data.imageHash.matches('^[a-f0-9]{64}$')
+        && data.storagePath == 'users/' + userId + '/savedOutfits/' + outfitId + '/photo'
+        && data.savedAt is timestamp
+        && data.status in ['ready', 'deleting'];
+      }
+
+      allow get, list: if owner();
+      allow create: if owner() && safeId() && valid(request.resource.data)
+                    && request.resource.data.status == 'ready'
+                    && request.resource.data.savedAt == request.time;
+      // Immutable match/image data. Only a deletion marker may be written.
+      allow update: if owner() && safeId() && valid(request.resource.data)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                    && request.resource.data.status == 'deleting';
+      allow delete: if owner() && safeId() && resource.data.status == 'deleting';
+    }
+  }
+}

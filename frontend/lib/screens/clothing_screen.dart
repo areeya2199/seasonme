@@ -1,12 +1,19 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextInputFormatter;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../data/season_palette.dart';
 import '../utils/color_utils.dart';
+import '../widgets/outfit_save_button.dart';
+import '../models/saved_outfit.dart';
+import '../services/saved_outfits_service.dart';
 
 // Outfit Checker: the user photographs (or uploads) a piece of clothing,
 // the app samples its color, and checks how close that color is to the
@@ -16,7 +23,8 @@ import '../utils/color_utils.dart';
 // No manual color picking: the photo is the only input.
 class ClothingScreen extends StatefulWidget {
   final SeasonKey season;
-  const ClothingScreen({super.key, required this.season});
+  final SavedOutfitsService? outfitService;
+  const ClothingScreen({super.key, required this.season, this.outfitService});
 
   @override
   State<ClothingScreen> createState() => _ClothingScreenState();
@@ -44,7 +52,13 @@ class _ImageAnalysis {
   final Color color;
   final double textureVariance;
   final double greenShare;
-  const _ImageAnalysis(this.color, this.textureVariance, this.greenShare);
+  final bool hasPixels;
+  const _ImageAnalysis(
+    this.color,
+    this.textureVariance,
+    this.greenShare, {
+    this.hasPixels = true,
+  });
 }
 
 class _ClothingScreenState extends State<ClothingScreen> {
@@ -54,12 +68,38 @@ class _ClothingScreenState extends State<ClothingScreen> {
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
   _OutfitMatch? _result;
+  OutfitSaveState _saveState = OutfitSaveState.idle;
+  OutfitSaveTask? _saveTask;
+  SavedOutfitsService? _outfitService;
+  StreamSubscription<String?>? _outfitAuth;
+  Uint8List? _pickedBytes;
+  String? _outfitOwner;
+  String? _saveError;
+  bool _accountChanged = false;
+  bool _hasPixels = false;
+  bool _picking = false;
+  int _imageRequest = 0;
+  bool _noteDialogOpen = false;
+  String? _confirmedNote;
 
   late final SeasonProfile _profile = SeasonPaletteData.getProfile(
     widget.season,
   );
 
+  @override
+  void initState() {
+    super.initState();
+    // Observe the account from screen entry, including while the gallery is
+    // open. Pure UI tests may render the screen without initializing Firebase.
+    if (widget.outfitService != null || Firebase.apps.isNotEmpty) {
+      _connectOutfitService();
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
+    if (_picking || _saveState == OutfitSaveState.saving) return;
+    _picking = true;
+    var request = _imageRequest;
     try {
       final picker = ImagePicker();
       final xfile = await picker.pickImage(
@@ -67,7 +107,10 @@ class _ClothingScreenState extends State<ClothingScreen> {
         maxWidth: 1200,
         imageQuality: 85,
       );
-      if (xfile == null) return; // user cancelled
+      if (!mounted || xfile == null) return;
+      request = ++_imageRequest;
+      _connectOutfitService();
+      if (_accountChanged) return;
 
       final file = File(xfile.path);
       setState(() {
@@ -77,13 +120,22 @@ class _ClothingScreenState extends State<ClothingScreen> {
         _result = null;
         _sampledColor = null;
         _looksSuspicious = false;
+        _pickedBytes = null;
+        _saveState = OutfitSaveState.idle;
+        _saveTask = null;
+        _confirmedNote = null;
+        _saveError = null;
+        _hasPixels = false;
       });
 
-      final analysis = await _analyzeImage(file);
+      final bytes = await file.readAsBytes();
+      final analysis = await _analyzeImage(bytes);
       final match = _matchAgainstSeason(analysis.color);
-      if (!mounted) return;
+      if (!mounted || request != _imageRequest) return;
       setState(() {
         _sampledColor = analysis.color;
+        _pickedBytes = bytes;
+        _hasPixels = analysis.hasPixels;
         // Heuristic only: high pixel-to-pixel variance in the sampled area
         // (fur/foliage texture) or a strong green cast (grass/leaves/skin)
         // suggests this may not be a plain garment. This is a rough signal,
@@ -94,10 +146,130 @@ class _ClothingScreenState extends State<ClothingScreen> {
         _state = _LoadState.done;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || request != _imageRequest) return;
       setState(() {
         _state = _LoadState.error;
         _errorMessage = 'Failed to read the photo. Please try again.';
+      });
+    } finally {
+      _picking = false;
+    }
+  }
+
+  void _connectOutfitService() {
+    if (_outfitService != null) return;
+    final service = widget.outfitService ?? SavedOutfitsService.firebase();
+    _outfitService = service;
+    _outfitOwner = service.currentUid;
+    _outfitAuth = service.accountChanges.listen((uid) {
+      if (!mounted || uid == _outfitOwner) return;
+      ++_imageRequest;
+      setState(() {
+        _accountChanged = true;
+        _pickedImage = null;
+        _pickedBytes = null;
+        _result = null;
+        _sampledColor = null;
+        _saveTask = null;
+        _confirmedNote = null;
+        _saveState = OutfitSaveState.idle;
+        _state = _LoadState.idle;
+        _saveError = 'บัญชีเปลี่ยนแล้ว กรุณาเปิด Outfit Checker ใหม่';
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _outfitAuth?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _editNote() async {
+    if (_noteDialogOpen ||
+        _saveTask != null ||
+        _saveState == OutfitSaveState.saving ||
+        _saveState == OutfitSaveState.saved ||
+        _accountChanged ||
+        _picking ||
+        !_hasPixels) {
+      return;
+    }
+    final request = _imageRequest;
+    setState(() => _noteDialogOpen = true);
+    String? response;
+    try {
+      response = await showDialog<String>(
+        context: context,
+        builder: (_) => _OutfitNoteDialog(initialNote: _confirmedNote),
+      );
+    } finally {
+      if (mounted) setState(() => _noteDialogOpen = false);
+    }
+    // Cancel discards only this draft. Ignore dialogs from an old photo/account.
+    if (!mounted ||
+        response == null ||
+        request != _imageRequest ||
+        _accountChanged) {
+      return;
+    }
+    setState(() => _confirmedNote = SavedOutfit.normalizeNote(response));
+  }
+
+  Future<void> _saveOutfit() async {
+    if (_noteDialogOpen ||
+        _saveState == OutfitSaveState.saving ||
+        _saveState == OutfitSaveState.saved ||
+        _accountChanged ||
+        _picking ||
+        !_hasPixels ||
+        _pickedBytes == null ||
+        _result == null ||
+        _result!.level == MatchLevel.poor) {
+      return;
+    }
+    final request = _imageRequest;
+    setState(() {
+      _saveState = OutfitSaveState.saving;
+      _saveError = null;
+    });
+    try {
+      _connectOutfitService();
+      final service = _outfitService!;
+      if (service.currentUid == null || service.currentUid != _outfitOwner) {
+        throw StateError('กรุณาเข้าสู่ระบบและเปิด Outfit Checker ใหม่');
+      }
+      final result = _result!;
+      _saveTask ??= service.createSaveTask(
+        OutfitMatchSnapshot(
+          season: widget.season,
+          matchPercent: result.percent,
+          matchLevel: result.level,
+          sampledColorArgb: _sampledColor!.toARGB32(),
+          closestName: result.closest.name,
+          closestArgb: result.closest.color.toARGB32(),
+          closestCategory: result.closestCategory,
+        ),
+        _pickedBytes!,
+        note: _confirmedNote,
+      );
+      await _saveTask!.save();
+      if (!mounted || request != _imageRequest || _accountChanged) return;
+      setState(() => _saveState = OutfitSaveState.saved);
+      if (_saveTask!.wasAlreadySaved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This outfit is already saved. The existing name and note have been kept.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted || request != _imageRequest || _accountChanged) return;
+      setState(() {
+        _saveState = OutfitSaveState.failed;
+        _saveError = outfitErrorMessage(error);
       });
     }
   }
@@ -108,13 +280,14 @@ class _ClothingScreenState extends State<ClothingScreen> {
   // variance and green-hue share) used only for the soft "does this look
   // like clothing" warning below — this stays a heuristic, not true scene
   // classification, since there's no vision model running on-device here.
-  Future<_ImageAnalysis> _analyzeImage(File file) async {
-    final bytes = await file.readAsBytes();
+  Future<_ImageAnalysis> _analyzeImage(Uint8List bytes) async {
     final codec = await ui.instantiateImageCodec(bytes, targetWidth: 120);
     final frame = await codec.getNextFrame();
     final image = frame.image;
     final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    if (byteData == null) return const _ImageAnalysis(Colors.grey, 0, 0);
+    if (byteData == null) {
+      return const _ImageAnalysis(Colors.grey, 0, 0, hasPixels: false);
+    }
 
     final pixels = byteData.buffer.asUint8List();
     final w = image.width, h = image.height;
@@ -141,7 +314,9 @@ class _ClothingScreenState extends State<ClothingScreen> {
         }
       }
     }
-    if (count == 0) return const _ImageAnalysis(Colors.grey, 0, 0);
+    if (count == 0) {
+      return const _ImageAnalysis(Colors.grey, 0, 0, hasPixels: false);
+    }
 
     final avgR = rSum / count, avgG = gSum / count, avgB = bSum / count;
     double varSum = 0;
@@ -283,8 +458,19 @@ class _ClothingScreenState extends State<ClothingScreen> {
               ),
               const SizedBox(height: 20),
 
+              if (_accountChanged)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _saveError!,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                ),
+
               GestureDetector(
-                onTap: _showSourceSheet,
+                onTap: _accountChanged || _saveState == OutfitSaveState.saving
+                    ? null
+                    : _showSourceSheet,
                 child: _pickedImage == null
                     ? DottedContainer(
                         child: Column(
@@ -318,12 +504,18 @@ class _ClothingScreenState extends State<ClothingScreen> {
                         borderRadius: BorderRadius.circular(20),
                         child: Stack(
                           children: [
-                            Image.file(
-                              _pickedImage!,
-                              width: double.infinity,
-                              height: 200,
-                              fit: BoxFit.cover,
-                            ),
+                            if (_pickedBytes != null)
+                              Image.memory(
+                                _pickedBytes!,
+                                width: double.infinity,
+                                height: 200,
+                                fit: BoxFit.cover,
+                              )
+                            else
+                              const SizedBox(
+                                height: 200,
+                                width: double.infinity,
+                              ),
                             Positioned(
                               top: 10,
                               right: 10,
@@ -351,7 +543,9 @@ class _ClothingScreenState extends State<ClothingScreen> {
               if (_state == _LoadState.done && _result != null) ...[
                 if (_looksSuspicious) _buildSuspiciousBanner(),
                 _buildResultCard(),
-                const SizedBox(height: 10),
+                const SizedBox(height: 14),
+                _buildSaveOutfit(),
+                const SizedBox(height: 14),
                 _buildExplanationCard(),
               ],
               if (_state == _LoadState.idle) _buildIdleHint(),
@@ -361,6 +555,111 @@ class _ClothingScreenState extends State<ClothingScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSaveOutfit() {
+    final canSave =
+        !_accountChanged &&
+        _hasPixels &&
+        _state == _LoadState.done &&
+        _pickedImage != null &&
+        _result != null &&
+        _result!.level != MatchLevel.poor;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          key: const ValueKey('outfit-note-card'),
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE4D4CC)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.edit_note,
+                    size: 18,
+                    color: Color(0xFF81736D),
+                  ),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Name / Note (Optional)',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF81736D)),
+                    ),
+                  ),
+                  Flexible(
+                    flex: 2,
+                    fit: FlexFit.tight,
+                    child: TextButton(
+                      key: const ValueKey('edit-outfit-note'),
+                      onPressed:
+                          canSave &&
+                              !_noteDialogOpen &&
+                              !_picking &&
+                              _saveTask == null &&
+                              _saveState != OutfitSaveState.saving &&
+                              _saveState != OutfitSaveState.saved
+                          ? _editNote
+                          : null,
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(left: 12),
+                        foregroundColor: const Color(0xFFA97C32),
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: Text(
+                        _saveState == OutfitSaveState.saved
+                            ? 'Saved with outfit'
+                            : _confirmedNote == null
+                            ? 'Add'
+                            : 'Edit',
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                _confirmedNote ?? 'No name or note added.',
+                key: const ValueKey('confirmed-outfit-note'),
+                style: TextStyle(
+                  fontSize: _confirmedNote == null ? 12 : 16,
+                  color: const Color(0xFF665B54),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_saveState == OutfitSaveState.failed && _saveTask != null)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Retry will use the name / note from your first save attempt.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF665B54)),
+            ),
+          ),
+        if (_saveError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              _saveError!,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFA43E37)),
+            ),
+          ),
+        OutfitSaveButton(
+          state: _saveState,
+          onPressed: canSave && !_noteDialogOpen ? _saveOutfit : null,
+        ),
+      ],
     );
   }
 
@@ -671,6 +970,90 @@ class _LevelInfo {
 }
 
 //Simple dashed border
+class _OutfitNoteDialog extends StatefulWidget {
+  final String? initialNote;
+  const _OutfitNoteDialog({this.initialNote});
+
+  @override
+  State<_OutfitNoteDialog> createState() => _OutfitNoteDialogState();
+}
+
+class _OutfitNoteDialogState extends State<_OutfitNoteDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialNote);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Name / Note'),
+      scrollable: true,
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Add a name or note to help you remember this outfit.'),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _controller,
+              minLines: 2,
+              maxLines: 3,
+              maxLength: SavedOutfit.maxNoteLength,
+              inputFormatters: [
+                TextInputFormatter.withFunction(
+                  (oldValue, newValue) =>
+                      newValue.text.runes.length <= SavedOutfit.maxNoteLength
+                      ? newValue
+                      : oldValue,
+                ),
+              ],
+              buildCounter:
+                  (
+                    _, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => Text(
+                    '${_controller.text.runes.length}/${SavedOutfit.maxNoteLength}',
+                  ),
+              decoration: const InputDecoration(
+                labelText: 'Name / Note (Optional)',
+                hintText: 'e.g. Purple shirt from Store A',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('You can save without adding a name or note.'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
 class DottedContainer extends StatelessWidget {
   final Widget child;
   const DottedContainer({super.key, required this.child});

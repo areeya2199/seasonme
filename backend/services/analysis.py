@@ -87,29 +87,20 @@ def _calculate_questionnaire_scores(answers):
         "image_weight": image_weight,
     }
 
-#เลือกฤดูจาก undertone, preference, L_star, chroma
-def _select_season(undertone, preference, L_star, chroma):
-    if undertone == "Warm":
-        if preference == "Bright & vivid":
+def _select_season(undertone, preference):
+    if undertone == "Cool":
+        if preference == "Bright":
+            return "Winter"
+        elif preference == "Muted":
+            return "Summer"
+
+    elif undertone == "Warm":
+        if preference == "Bright":
             return "Spring"
-        if preference == "Deep & rich":
+        elif preference == "Muted":
             return "Autumn"
 
-        # Soft/muted and skipped preferences ใช้ค่า L_star และ chroma ในการตัดสินใจ
-        if L_star > 66 and chroma >= 45:
-            return "Spring"
-        return "Autumn"
-    
-    #cool undertone
-    if preference == "Soft & muted":
-        return "Summer"
-    if preference == "Deep & rich":
-        return "Winter"
-
-    # Bright/vivid and skipped preferences ใช้ค่า L_star และ chroma ในการตัดสินใจ
-    if L_star > 66 and chroma < 45:
-        return "Summer"
-    return "Winter"
+    raise ValueError("Season requires Warm/Cool and Bright/Muted")
 
 #วิเคราะห์ภาพ
 def analyze_skin(image, answers):
@@ -316,7 +307,7 @@ def analyze_skin(image, answers):
 
 
 
-    season = _select_season(undertone, preference, L_star, chroma)
+    season = _select_season(undertone, preference)
 
     print("season =", season)
 
