@@ -1,0 +1,13 @@
+# Allow only production inputs; no credentials, .env, .venv, caches or tests.
+**
+!Dockerfile
+!.dockerignore
+!requirements-render.txt
+!main.py
+!services/
+services/**
+!services/analysis.py
+!services/auth.py
+!models/
+models/**
+!models/face_landmarker.task

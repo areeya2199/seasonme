@@ -1,0 +1,11 @@
+# Runtime secrets must stay outside source control, including at the repo root.
+.env
+.env.*
+!.env.example
+secrets/
+*service-account*.json
+*firebase-adminsdk*.json
+firebase-admin.json
+
+# Disposable Phase B environments, dependency reports and test output.
+.render-test/

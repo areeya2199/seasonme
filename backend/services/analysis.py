@@ -2,9 +2,10 @@ import mediapipe as mp
 import cv2
 import numpy as np
 import math
+from pathlib import Path
 
 
-model_path = "models/face_landmarker.task"
+model_path = str(Path(__file__).resolve().parent.parent / "models" / "face_landmarker.task")
 
 
 BaseOptions = mp.tasks.BaseOptions
