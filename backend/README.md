@@ -21,17 +21,16 @@ In the PowerShell session that starts the backend:
 $env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\Users\Gim\seasonme-secrets\firebase-admin.json'
 $env:FIREBASE_PROJECT_ID = 'seasonme-977e3'
 Set-Location C:\Users\Gim\seasonme\backend
-# .venv is the isolated environment used to verify this change locally.
-.\.venv\Scripts\python.exe -m pip install firebase-admin==7.7.0 python-multipart==0.0.32
-.\.venv\Scripts\python.exe -B -m uvicorn main:app --host 0.0.0.0 --port 8000
+# Reuse the existing local environment; Phase B does not install into it.
+.\.venv\Scripts\python.exe -B -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The credentials variable is a **file path**, not JSON text. This change does not
 generate or supply credentials. The local `.venv` was created with
 `--system-site-packages` to reuse the working analysis dependencies without
 changing the global Python environment. On a fresh machine create a virtualenv
-and install `requirements.txt`. Existing requirements include both OpenCV
-packages; that pre-existing dependency issue is outside this auth change.
+and install `requirements.txt`. That original file is preserved, including its
+two OpenCV packages. The separately tested Linux list is `requirements-render.txt`.
 
 The Admin app initializes on the first authenticated request through Application
 Default Credentials (ADC). A health check does not validate credential setup.
@@ -66,6 +65,133 @@ service-account identity. Elsewhere mount credentials through the provider's
 secret facility and set `GOOGLE_APPLICATION_CREDENTIALS` to the runtime file path.
 Set `FIREBASE_PROJECT_ID` to the Flutter project. Never copy credentials into a
 Docker image. This change does not deploy or configure any Cloud provider.
+
+## Phase B: Linux preparation (2026-10-19)
+
+The confirmed project is `seasonme-977e3`. Local and Render are separate backend
+processes and URLs, but use the same Firebase project and user data. Flutter
+accesses Firestore/Storage directly; changing the API URL does not select a
+different Firebase project or create separate history collections.
+
+`requirements-render.txt` preserves every version pin from `requirements.txt`
+and removes only `opencv-python==5.0.0.93`. Linux pip resolution selects exactly
+one OpenCV distribution: `opencv-contrib-python==5.0.0.93`, which is required by
+`mediapipe==0.10.35`. Do not add a headless OpenCV package alongside it: pip would
+still satisfy MediaPipe's named dependency with the non-headless distribution.
+Dependencies not pinned by the original file (including Firebase's transitive
+dependencies) are resolved by pip; the full tested resolution is retained in
+the ignored local evidence directory. This is not a complete dependency lock.
+
+The model path now resolves from `services/analysis.py`, independent of the
+working directory. Image decoding, preprocessing, questionnaire scoring,
+undertone and season selection are unchanged.
+
+### Actual Linux results and system-library requirement
+
+Tests used a fresh virtual environment at `/opt/seasonme-test` in a local Docker
+container based on `python:3.12.1-slim-bookworm` (Linux x86-64, Debian Bookworm).
+The existing Windows `.venv` was not modified or copied into the container.
+Only source, model, tests and a repository image fixture were copied; no Firebase
+credentials were supplied to the container.
+
+Python installation and `pip check` passed. The unmodified slim image could not
+import OpenCV (`libxcb.so.1` missing); `ldd` also showed missing GL and GLib
+libraries. After adding these, MediaPipe model creation exposed missing GLES/EGL
+libraries. These packages were installed **only in the disposable container**:
+
+```sh
+apt-get update
+apt-get install -y --no-install-recommends libxcb1 libgl1 libglib2.0-0 libgles2 libegl1
+```
+
+With these native libraries, imports and model initialization passed even from
+`/tmp` with `PYTHONPATH=/app/backend`. A real face fixture (`frontend/assets/person.png`,
+683 by 677 pixels) passed inference with three answer sets: fully answered,
+partly skipped, and Q1-Q3 all skipped. Every returned field matched the pre-change
+baseline on Linux, and all three results also matched the Windows results.
+An AST comparison confirmed the analysis code differed only in the path/import.
+An actual Uvicorn subprocess also started with `$PORT=10000`; HTTP `/` returned
+200 and a complete multipart `/analyze` request without a token returned 401.
+The subprocess was stopped after testing and its port was not published outside
+the container.
+
+The existing backend suite passed 32 tests on Linux and 32 on Windows. Auth tests
+mock Firebase token verification; they do not prove live Firebase credentials or
+real user tokens work on Render. MediaPipe emitted native inference warnings and
+Starlette emitted an existing `httpx` deprecation warning; neither failed tests.
+
+This proves the tested Linux environment works, **not** that Render's native
+runtime has all these libraries. No Dockerfile or Render configuration has been
+added. Selecting a reproducible hosting runtime remains a separate approval gate;
+a Dockerfile would be an additional file requiring approval. Render Free memory,
+CPU, concurrent requests, large photos and cold-start behavior are not certified
+by this fixture test. Python 3.12.1 records the test baseline, not a recommendation
+to keep that old patch version in a public service without further validation.
+
+### Flutter URL and timeout selection
+
+From `frontend`, local Android Emulator development keeps the existing URL and
+30-second default timeout:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
+```
+
+For a real phone, replace that URL with the notebook's reachable LAN IP and port
+8000. Verify the phone's network access, firewall and HTTP policy before an exam.
+Firebase still needs internet access even when FastAPI runs locally.
+
+After a Render URL exists, the future APK command is:
+
+```text
+flutter build apk --release --dart-define=API_BASE_URL=https://<SERVICE>.onrender.com --dart-define=API_TIMEOUT_SECONDS=120
+```
+
+`API_TIMEOUT_SECONDS` is an integer compile-time setting; omit it for 30 seconds.
+Use a positive value. The timeout still covers input preparation, token retrieval,
+upload and response together. It does not cancel the underlying HTTP operation
+or automatically retry a request. The 120-second value is a starting setting,
+not a guarantee against a cold-start timeout.
+
+Both settings are fixed when the app is built. An installed Render APK does not
+switch to Local automatically. Keep a separately labelled local build or use
+`flutter run` with the Local URL for demonstrations. Preserve APK copies outside
+the build output directory so a later build does not overwrite the fallback.
+
+The existing API tests passed five tests with the default configuration; the
+API/questionnaire/history/photo regression selection passed 21 tests with
+`API_TIMEOUT_SECONDS=120`. Disposable virtual-clock probes verified the actual
+ApiService timeout boundary at 30 and 120 seconds without waiting in real time.
+No UI, API URL default, Firebase flow or camera flow was changed.
+
+### Future Render commands (not executed)
+
+Use Root Directory `backend`, a tested Python version, and these candidate commands:
+
+```sh
+python -m pip install -r requirements-render.txt
+python -m uvicorn main:app --host 0.0.0.0 --port "$PORT" --workers 1
+```
+
+The runtime must also provide the native libraries above. Use `/` for a public
+health check, but test authenticated analysis separately. Do not use `--reload`
+on Render. If approved later, store Admin JSON using a Render Secret File named
+`firebase-admin.json` and set:
+
+```text
+GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/firebase-admin.json
+FIREBASE_PROJECT_ID=seasonme-977e3
+```
+
+The first variable is a file path, not JSON text. Never place the file in Git,
+Flutter assets, container source or an image layer. Phase B does not upload it.
+Real-token checks, APK/device tests, live History/Storage tests and Render cold
+starts remain for later phases. No commit, push, branch change or deployment is
+authorized by completing Phase B.
+
+Local test artifacts (resolution/install reports, baseline hashes, inference JSON
+and temporary probes) are in root `.render-test/`, ignored by Git. Keep tracked
+`.pyc` cleanup deferred; Phase B does not remove or untrack those files.
 
 Official references:
 - https://firebase.google.com/docs/auth/admin/verify-id-tokens

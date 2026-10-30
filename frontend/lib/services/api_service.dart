@@ -17,6 +17,11 @@ class ApiService {
     defaultValue: 'http://10.0.2.2:8000',
   );
 
+  static const int _timeoutSeconds = int.fromEnvironment(
+    'API_TIMEOUT_SECONDS',
+    defaultValue: 30,
+  );
+
   Future<String> hello() async {
     final response = await http.get(Uri.parse("$baseUrl/"));
 
@@ -35,7 +40,7 @@ class ApiService {
     return _analyzeImage(
       imagePath,
       Map<int, String?>.from(answers),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: _timeoutSeconds));
   }
 
   Future<Map<String, dynamic>?> _analyzeImage(

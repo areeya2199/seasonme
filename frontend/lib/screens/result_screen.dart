@@ -1,14 +1,13 @@
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/season_palette.dart';
 import '../data/occasion_palette.dart';
-import '../utils/color_utils.dart';
 import '../utils/undertone_utils.dart';
 import '../services/analysis_history.dart';
 import '../services/history_save_task.dart';
@@ -24,11 +23,12 @@ class ResultScreen extends StatefulWidget {
   final bool recordToHistory;
   final Map<String, dynamic>? analysis;
   final Map<String, String?>? questionnaireAnswers;
-  // Local photo used immediately after processing; history uses localImageKey.
   final String? imagePath;
   final String? localImageKey;
-  final AnalysisHistoryEntry? historyEntry;
-  final HistoryPhotoAccess? historyPhotoAccess;
+  final AnalysisHistoryEntry?
+  historyEntry;
+  final HistoryPhotoAccess?
+  historyPhotoAccess;
 
   const ResultScreen({
     super.key,
@@ -47,28 +47,22 @@ class ResultScreen extends StatefulWidget {
 }
 
 class _ResultScreenState extends State<ResultScreen> {
-  static const int _topsGroupCount = 7;
-  static const int _topsGroupSize = 9;
-  static const int _occasionItemCount = 5;
+  static const int _occasionItemCount =
+      8;
 
   bool _nightMode = false;
   Occasion? _occasion;
 
-  // 0 = Wardrobe, 1 = Beauty & Jewelry
   int _mainTab = 0;
-  // which category is shown in the Beauty & Jewelry tab
   String _beautyCategory = 'hair';
 
-  // Colors the user picked for the two previews. They are kept while this
-  // screen is open (switching Wardrobe <-> Beauty & Jewelry does not clear
-  // them) and start empty again every time the screen is opened.
   Color? _shirtColor;
   Color? _pantsColor;
   final Map<String, Color> _beautyPicks = {};
-  // Name + hex of the swatch that was just tapped.
   SwatchItem? _beautyInfo;
 
   int _topsGroupIndex = 0;
+  int _bottomsGroupIndex = 0;
 
   late SeasonProfile _profile;
   late List<SwatchItem> _tops;
@@ -79,11 +73,13 @@ class _ResultScreenState extends State<ResultScreen> {
   late List<SwatchItem> _lipstick;
   late List<SwatchItem> _jewelry;
   Uint8List? _historyPhoto;
-  Future<void>? _historySave;
+  Future<void>?
+  _historySave;
   HistorySaveTask? _saveTask;
   StreamSubscription<String?>? _authSubscription;
   late final HistoryPhotoAccess _photoAccess =
-      widget.historyPhotoAccess ?? FirebaseHistoryPhotoAccess();
+      widget.historyPhotoAccess ??
+      FirebaseHistoryPhotoAccess();
   bool _savingHistory = false;
   bool _loadingPhoto = false;
   bool _saveNeedsRetry = false;
@@ -99,16 +95,21 @@ class _ResultScreenState extends State<ResultScreen> {
     final entry = widget.historyEntry;
     if (entry != null || (widget.recordToHistory && widget.analysis != null)) {
       final owner = entry?.ownerUid ?? FirebaseAuth.instance.currentUser?.uid;
-      _accountChanged = owner != _photoAccess.currentUid;
+      _accountChanged =
+          owner !=
+          _photoAccess.currentUid;
       if (_accountChanged) {
-        _photoMessage = 'Your account changed. Please reopen history.';
+        _photoMessage =
+            'Your account changed. Please reopen history.';
       }
       _authSubscription = _photoAccess.accountChanges.listen((uid) {
-        if (!mounted || uid == owner) return;
+        if (!mounted || uid == owner)
+          return;
         setState(() {
           _accountChanged = true;
           _historyPhoto = null;
-          _photoMessage = 'Your account changed. Please reopen history.';
+          _photoMessage =
+              'Your account changed. Please reopen history.';
           _saveMessage = null;
           _saveNeedsRetry = false;
           _uploadNeedsRetry = false;
@@ -133,7 +134,8 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Future<void> _saveAnalysis() async {
-    if (_savingHistory || _accountChanged) return;
+    if (_savingHistory || _accountChanged)
+      return;
     setState(() {
       _savingHistory = true;
       _saveNeedsRetry = false;
@@ -143,11 +145,14 @@ class _ResultScreenState extends State<ResultScreen> {
       _saveTask ??= AnalysisHistoryService.createSaveTask(
         season: widget.season,
         analysis: widget.analysis!,
-        questionnaireAnswers: widget.questionnaireAnswers ?? const {},
+        questionnaireAnswers:
+            widget.questionnaireAnswers ?? const {},
         imagePath: widget.imagePath,
       );
-      final ready = await _saveTask!.save();
-      if (!mounted || _accountChanged) return;
+      final ready = await _saveTask!
+          .save();
+      if (!mounted || _accountChanged)
+        return;
       setState(() {
         _saveNeedsRetry = !ready;
         _saveMessage = ready
@@ -158,7 +163,8 @@ class _ResultScreenState extends State<ResultScreen> {
       if (!mounted || _accountChanged) return;
       setState(() {
         _saveNeedsRetry = true;
-        _saveMessage = 'Could not finish saving history. Please retry.';
+        _saveMessage =
+            'Could not finish saving history. Please retry.';
       });
     } finally {
       if (mounted) setState(() => _savingHistory = false);
@@ -166,7 +172,8 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Future<void> _loadHistoryPhoto() async {
-    if (_loadingPhoto || _accountChanged) return;
+    if (_loadingPhoto || _accountChanged)
+      return;
     setState(() {
       _loadingPhoto = true;
       _photoMessage = null;
@@ -174,10 +181,14 @@ class _ResultScreenState extends State<ResultScreen> {
     try {
       final entry = widget.historyEntry;
       final bytes = entry != null
-          ? await _photoAccess.load(entry)
+          ? await _photoAccess.load(
+              entry,
+            )
           : widget.localImageKey == null
           ? null
-          : await AnalysisHistoryService.loadPhoto(widget.localImageKey!);
+          : await AnalysisHistoryService.loadPhoto(
+              widget.localImageKey!,
+            );
       if (!mounted || _accountChanged) return;
       setState(() {
         _historyPhoto = bytes;
@@ -188,8 +199,8 @@ class _ResultScreenState extends State<ResultScreen> {
     } catch (_) {
       if (mounted && !_accountChanged) {
         setState(
-          () =>
-              _photoMessage = 'Could not load the history photo. Please retry.',
+          () => _photoMessage =
+              'Could not load the history photo. Please retry.',
         );
       }
     } finally {
@@ -199,7 +210,8 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Future<void> _retryUpload() async {
     final entry = widget.historyEntry;
-    if (entry == null || _loadingPhoto || _accountChanged) return;
+    if (entry == null || _loadingPhoto || _accountChanged)
+      return;
     setState(() {
       _loadingPhoto = true;
       _photoMessage = null;
@@ -207,7 +219,9 @@ class _ResultScreenState extends State<ResultScreen> {
     try {
       final ready = await _photoAccess.retry(entry);
       if (!mounted || _accountChanged) return;
-      setState(() => _uploadNeedsRetry = !ready);
+      setState(
+        () => _uploadNeedsRetry = !ready,
+      );
     } catch (_) {
       if (mounted && !_accountChanged) {
         setState(
@@ -254,11 +268,15 @@ class _ResultScreenState extends State<ResultScreen> {
         if (_uploadNeedsRetry && !_accountChanged)
           TextButton(
             onPressed: _loadingPhoto ? null : _retryUpload,
-            child: const Text('Retry photo upload'),
+            child: const Text(
+              'Retry photo upload',
+            ),
           ),
         if (_photoMessage != null && !_accountChanged)
           TextButton(
-            onPressed: _loadingPhoto ? null : _loadHistoryPhoto,
+            onPressed: _loadingPhoto
+                ? null
+                : _loadHistoryPhoto,
             child: const Text('Retry loading photo'),
           ),
       ],
@@ -266,25 +284,42 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   void _loadProfile() {
-    _profile = SeasonPaletteData.getProfile(widget.season, night: _nightMode);
+    _profile = SeasonPaletteData.getProfile(
+      widget.season,
+      night: _nightMode,
+    );
+
+    if (_topsGroupIndex >= _profile.topGroups.length) _topsGroupIndex = 0;
+    if (_bottomsGroupIndex >= _profile.topGroups.length) _bottomsGroupIndex = 0;
 
     if (_occasion == null) {
-      _bottoms = SeasonPaletteData.pickRandom(_profile.bottoms, 9);
+      _tops =
+          _profile.topGroups[_topsGroupIndex].swatches;
+      _bottoms = _profile.bottomsOf(
+        _bottomsGroupIndex,
+      );
       _hair = _profile.hair;
       _eyeMakeup = _profile.eyeMakeup;
       _blush = _profile.blush;
       _lipstick = _profile.lipstick;
       _jewelry = _profile.jewelry;
-      _topsGroupIndex = Random().nextInt(_topsGroupCount);
-      _tops = _topsFromGroup();
     } else {
       _refreshOccasionPools();
     }
   }
 
-  List<SwatchItem> _topsFromGroup() {
-    final start = _topsGroupIndex * _topsGroupSize;
-    return _profile.topsPool.sublist(start, start + _topsGroupSize);
+  void _setTopGroup(int index) {
+    setState(() {
+      _topsGroupIndex = index;
+      _tops = _profile.topGroups[index].swatches;
+    });
+  }
+
+  void _setBottomGroup(int index) {
+    setState(() {
+      _bottomsGroupIndex = index;
+      _bottoms = _profile.bottomsOf(index);
+    });
   }
 
   void _refreshOccasionPools() {
@@ -326,25 +361,6 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  void _shuffleTops() {
-    setState(() {
-      if (_occasion == null) {
-        int next;
-        do {
-          next = Random().nextInt(_topsGroupCount);
-        } while (next == _topsGroupIndex && _topsGroupCount > 1);
-        _topsGroupIndex = next;
-        _tops = _topsFromGroup();
-      } else {
-        _tops = OccasionPaletteSelector.select(
-          _occasion!,
-          _profile.topsPool,
-          _occasionItemCount,
-        );
-      }
-    });
-  }
-
   void _setNightMode(bool value) {
     if (value == _nightMode) return;
     setState(() {
@@ -356,8 +372,10 @@ class _ResultScreenState extends State<ResultScreen> {
   Future<void> _showOccasionPicker() async {
     final chosen = await showModalBottomSheet<Object?>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _OccasionSheet(current: _occasion),
+      backgroundColor:
+          Colors.transparent,
+      builder: (context) =>
+          _OccasionSheet(current: _occasion),
     );
     if (chosen == _unchanged) return;
     setState(() {
@@ -366,36 +384,24 @@ class _ResultScreenState extends State<ResultScreen> {
     });
   }
 
-  // Tapping a Top: sets the shirt color and auto-picks a harmonious pair of
-  // pants (color-theory match). Tapping the same top again clears both.
   void _onTopTap(int index) {
     setState(() {
       final color = _tops[index].color;
-      if (_shirtColor == color) {
-        _shirtColor = null;
-        _pantsColor = null;
-        return;
-      }
-      _shirtColor = color;
-      final match = ColorUtils.pickHarmoniousIndex(
-        color,
-        _bottoms.map((e) => e.color).toList(),
-        random: Random(),
-      );
-      _pantsColor = match == null ? null : _bottoms[match].color;
+      _shirtColor = _shirtColor == color
+          ? null
+          : color;
     });
   }
 
-  // Tapping a Bottom directly overrides whatever the auto-match picked.
   void _onBottomTap(int index) {
     setState(() {
       final color = _bottoms[index].color;
-      _pantsColor = _pantsColor == color ? null : color;
+      _pantsColor = _pantsColor == color
+          ? null
+          : color;
     });
   }
 
-  // Tapping a Beauty swatch sets that category's color on the preview;
-  // tapping it again clears it. Other categories are never touched.
   void _onBeautyTap(String category, SwatchItem item) {
     setState(() {
       if (_beautyPicks[category] == item.color) {
@@ -464,7 +470,9 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 20,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -480,10 +488,11 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 16),
             _buildMainTabs(),
             const SizedBox(height: 18),
-            _mainTab == 0 ? _buildWardrobeTab() : _buildBeautyTab(),
+            _mainTab == 0
+                ? _buildWardrobeTab()
+                : _buildBeautyTab(),
             const SizedBox(height: 20),
 
-            // Check an Outfit — compares against THIS season only.
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -491,7 +500,9 @@ class _ResultScreenState extends State<ResultScreen> {
                   backgroundColor: const Color(0xff4c3935),
                   foregroundColor: AppColors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
@@ -499,7 +510,9 @@ class _ResultScreenState extends State<ResultScreen> {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ClothingScreen(season: widget.season),
+                    builder: (_) => ClothingScreen(
+                      season: widget.season,
+                    ),
                   ),
                 ),
                 icon: const Icon(Icons.arrow_forward, size: 18),
@@ -514,7 +527,9 @@ class _ResultScreenState extends State<ResultScreen> {
               child: TextButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const SelectScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const SelectScreen(),
+                  ),
                 ),
                 child: const Text(
                   'Analyze Again',
@@ -573,12 +588,15 @@ class _ResultScreenState extends State<ResultScreen> {
           color: AppColors.cream,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: small ? 15 : 20, color: AppColors.charcoal),
+        child: Icon(
+          icon,
+          size: small ? 15 : 20,
+          color: AppColors.charcoal,
+        ),
       ),
     );
   }
 
-  // ไม่ต้องรับหรือส่ง chroma แล้ว เพราะการ์ดแสดงเฉพาะ undertone จากผลวิเคราะห์
   Widget _buildPersonalColorCard() {
     final details = _buildPersonalColorDetails();
     return Container(
@@ -627,7 +645,6 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _buildPersonalColorDetails() {
-    // สีตัวหนังสือในการ์ดซีซั่น (แก้ได้ที่ season_card_colors.dart)
     final cardText = seasonCardText(widget.season);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,7 +670,6 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        // อ่าน undertone จากผลวิเคราะห์ และแสดงใต้ชื่อฤดู
         _pillTag(
           UndertoneUtils.label(widget.analysis, withSuffix: true),
           cardText,
@@ -671,19 +687,17 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  // Fixed width/height frame, centered — BoxFit.cover means the photo
-  // always fills this exact frame regardless of the source photo's own
-  // dimensions or orientation (portrait, landscape, square all look the
-  // same size here; excess is cropped rather than the frame resizing).
   static const double _photoWidth = 110;
   static const double _photoHeight = 140;
 
   Widget _buildUserPhoto() {
-    if (_accountChanged) return const SizedBox.shrink();
+    if (_accountChanged)
+      return const SizedBox.shrink();
     final path = widget.imagePath;
     final bytes = _historyPhoto;
     if (path == null && bytes == null) {
-      if (!_loadingPhoto) return const SizedBox.shrink();
+      if (!_loadingPhoto)
+        return const SizedBox.shrink();
       return Container(
         width: _photoWidth,
         height: _photoHeight,
@@ -711,8 +725,6 @@ class _ResultScreenState extends State<ResultScreen> {
         color: AppColors.mid,
       ),
     );
-    // On Flutter web the picked "path" is a blob URL and Image.file is not
-    // supported, so use Image.network there.
     final image = path == null
         ? Image.memory(
             bytes!,
@@ -750,7 +762,10 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
           ],
         ),
-        child: ClipRRect(borderRadius: BorderRadius.circular(20), child: image),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: image,
+        ),
       ),
     );
   }
@@ -782,7 +797,9 @@ class _ResultScreenState extends State<ResultScreen> {
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: active ? const Color(0xff4c3935) : AppColors.white,
+              color: active
+                  ? const Color(0xff4c3935)
+                  : AppColors.white,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Wrap(
@@ -850,11 +867,16 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.place_outlined, size: 16, color: AppColors.mid),
+            const Icon(
+              Icons.place_outlined,
+              size: 16,
+              color: AppColors.mid,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _occasion?.label ?? 'All occasions',
+                _occasion?.label ??
+                    'All occasions',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -862,7 +884,11 @@ class _ResultScreenState extends State<ResultScreen> {
                 ),
               ),
             ),
-            const Icon(Icons.expand_more, size: 18, color: AppColors.mid),
+            const Icon(
+              Icons.expand_more,
+              size: 18,
+              color: AppColors.mid,
+            ),
           ],
         ),
       ),
@@ -905,8 +931,6 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  // ---------------- Wardrobe: Tops + Bottoms + live mannequin ----------------
-
   Widget _buildWardrobeTab() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -916,7 +940,13 @@ class _ResultScreenState extends State<ResultScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _sectionHeaderRow('Tops', onShuffle: _shuffleTops),
+              _sectionHeaderRow(
+                'Tops',
+                trailing: _groupDropdown(
+                  selectedIndex: _topsGroupIndex,
+                  onSelected: _setTopGroup,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
                 _dayNightBlurb(),
@@ -929,7 +959,13 @@ class _ResultScreenState extends State<ResultScreen> {
                 onTap: _onTopTap,
               ),
               const SizedBox(height: 22),
-              _sectionHeaderRow('Bottoms'),
+              _sectionHeaderRow(
+                'Bottoms',
+                trailing: _groupDropdown(
+                  selectedIndex: _bottomsGroupIndex,
+                  onSelected: _setBottomGroup,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
                 _dayNightBlurb(),
@@ -945,12 +981,15 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
         ),
         const SizedBox(width: 14),
-        MannequinCard(shirtColor: _shirtColor, pantsColor: _pantsColor),
+        MannequinCard(
+          shirtColor: _shirtColor,
+          pantsColor: _pantsColor,
+        ),
       ],
     );
   }
 
-  Widget _sectionHeaderRow(String title, {VoidCallback? onShuffle}) {
+  Widget _sectionHeaderRow(String title, {Widget? trailing}) {
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 8,
@@ -964,8 +1003,100 @@ class _ResultScreenState extends State<ResultScreen> {
             color: AppColors.charcoal,
           ),
         ),
-        if (onShuffle != null) ...[_ShuffleButton(onTap: onShuffle)],
+        if (trailing != null) trailing,
       ],
+    );
+  }
+
+  Widget _groupDropdown({
+    required int selectedIndex,
+    required ValueChanged<int> onSelected,
+  }) {
+    final groups = _profile.topGroups;
+    final enabled =
+        _occasion == null;
+    final current = groups[selectedIndex];
+
+    Widget dot(Color c) => Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        color: c,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black12, width: 0.5),
+      ),
+    );
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: PopupMenuButton<int>(
+        enabled: enabled,
+        tooltip: 'Choose color group',
+        color: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        onSelected: onSelected,
+        itemBuilder: (_) => [
+          for (int i = 0; i < groups.length; i++)
+            PopupMenuItem<int>(
+              value: i,
+              height: 40,
+              child: Row(
+                children: [
+                  dot(groups[i].color),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      groups[i].name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: i == selectedIndex
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        color: AppColors.charcoal,
+                      ),
+                    ),
+                  ),
+                  if (i == selectedIndex)
+                    const Icon(
+                      Icons.check,
+                      size: 16,
+                      color: AppColors.gold,
+                    ),
+                ],
+              ),
+            ),
+        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.charcoal.withOpacity(0.08),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              dot(current.color),
+              const SizedBox(width: 6),
+              Text(
+                current.name,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.charcoal,
+                ),
+              ),
+              const Icon(Icons.expand_more, size: 16, color: AppColors.mid),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -974,42 +1105,72 @@ class _ResultScreenState extends State<ResultScreen> {
     Color? selectedColor,
     required void Function(int index) onTap,
   }) {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: items.asMap().entries.map((entry) {
-        final i = entry.key;
-        final s = entry.value;
-        final active = selectedColor != null && s.color == selectedColor;
-        return GestureDetector(
-          onTap: () => onTap(i),
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: s.color,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: active ? AppColors.gold : Colors.white,
-                width: active ? 2.5 : 1,
+    const int cols = 4;
+    const double gap = 6;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = ((constraints.maxWidth - gap * (cols - 1)) / cols)
+            .clamp(24.0, 40.0)
+            .toDouble();
+
+        Widget cell(int i) {
+          final s = items[i];
+          final active =
+              selectedColor != null &&
+              s.color == selectedColor;
+          return GestureDetector(
+            onTap: () => onTap(i),
+            child: Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: s.color,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: active
+                      ? AppColors.gold
+                      : Colors.white,
+                  width: active ? 2.5 : 1,
+                ),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: AppColors.gold.withOpacity(
+                            0.4,
+                          ),
+                          blurRadius: 5,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
               ),
-              boxShadow: active
-                  ? [
-                      BoxShadow(
-                        color: AppColors.gold.withOpacity(0.4),
-                        blurRadius: 5,
-                        offset: const Offset(0, 1),
-                      ),
-                    ]
-                  : null,
             ),
-          ),
+          );
+        }
+
+        final rows = <Widget>[];
+        for (int start = 0; start < items.length; start += cols) {
+          final end = start + cols > items.length ? items.length : start + cols;
+          if (rows.isNotEmpty) rows.add(const SizedBox(height: gap));
+          rows.add(
+            Row(
+              children: [
+                for (int i = start; i < end; i++) ...[
+                  if (i > start) const SizedBox(width: gap),
+                  cell(i),
+                ],
+              ],
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: rows,
         );
-      }).toList(),
+      },
     );
   }
-
-  // ---------------- Beauty & Jewelry: palette + live preview ----------------
 
   static const List<String> _beautyCategories = [
     'hair',
@@ -1020,11 +1181,11 @@ class _ResultScreenState extends State<ResultScreen> {
   ];
 
   Widget _buildBeautyTab() {
-    final picked = _beautyPicks[_beautyCategory];
+    final picked =
+        _beautyPicks[_beautyCategory];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // All five category buttons stay on one row (they shrink to fit).
         Row(
           children: [
             for (int i = 0; i < _beautyCategories.length; i++) ...[
@@ -1083,8 +1244,6 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  // Small popup under the palette: name + hex of the tapped color.
-  // It reserves its own space, so nothing moves and nothing is covered.
   Widget _beautyInfoPopup() {
     final item = _beautyInfo;
     final hex = item == null
@@ -1118,7 +1277,8 @@ class _ResultScreenState extends State<ResultScreen> {
                     width: 18,
                     height: 18,
                     decoration: BoxDecoration(
-                      color: item?.color ?? Colors.transparent,
+                      color:
+                          item?.color ?? Colors.transparent,
                       borderRadius: BorderRadius.circular(5),
                       border: Border.all(color: Colors.white, width: 1),
                     ),
@@ -1132,7 +1292,8 @@ class _ResultScreenState extends State<ResultScreen> {
                         Text(
                           item?.name ?? '',
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          overflow:
+                              TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
@@ -1191,7 +1352,8 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 }
 
-const Object _unchanged = Object();
+const Object _unchanged =
+    Object();
 
 class _OccasionSheet extends StatelessWidget {
   final Occasion? current;
@@ -1207,7 +1369,10 @@ class _OccasionSheet extends StatelessWidget {
     ) {
       final active = current == value;
       return ListTile(
-        leading: Icon(icon, color: active ? AppColors.gold : AppColors.mid),
+        leading: Icon(
+          icon,
+          color: active ? AppColors.gold : AppColors.mid,
+        ),
         title: Text(
           label,
           style: TextStyle(
@@ -1222,21 +1387,30 @@ class _OccasionSheet extends StatelessWidget {
               )
             : null,
         trailing: active
-            ? const Icon(Icons.check, color: AppColors.gold)
+            ? const Icon(
+                Icons.check,
+                color: AppColors.gold,
+              )
             : null,
-        onTap: () => Navigator.pop(context, value),
+        onTap: () =>
+            Navigator.pop(context, value),
       );
     }
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context, _unchanged);
+        Navigator.pop(
+          context,
+          _unchanged,
+        );
         return false;
       },
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
         ),
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: SafeArea(
@@ -1269,42 +1443,24 @@ class _OccasionSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              tile('Show All (Default)', null, Icons.palette_outlined, null),
+              tile(
+                'Show All (Default)',
+                null,
+                Icons.palette_outlined,
+                null,
+              ),
               const Divider(height: 1),
               for (final occ in Occasion.values)
-                tile(occ.label, occ.subtitle, occ.icon, occ),
+                tile(
+                  occ.label,
+                  occ.subtitle,
+                  occ.icon,
+                  occ,
+                ),
               const SizedBox(height: 8),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ShuffleButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ShuffleButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.charcoal.withOpacity(0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.shuffle, size: 15, color: AppColors.charcoal),
       ),
     );
   }
