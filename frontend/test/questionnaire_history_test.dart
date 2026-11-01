@@ -29,12 +29,11 @@ void main() {
         final stored = <String, dynamic>{
           'season': combination.$3.name,
           'undertone': combination.$1,
-          'questionnaireAnswers': {
-            '0': null,
-            '1': 'Silver',
-            '2': null,
-            '3': combination.$2,
-          },
+          'questionnaireAnswers': {'3': combination.$2},
+          'warm_score': combination.$1 == 'Warm' ? 1 : 0,
+          'cool_score': combination.$1 == 'Cool' ? 1 : 0,
+          'warm_question': null,
+          'cool_question': null,
           'schemaVersion': 2,
           'photo': {
             'storagePath': 'users/alice/analysisHistory/current/photo',
@@ -56,6 +55,37 @@ void main() {
       },
     );
   }
+
+  test('legacy Q1-Q4 scores and answers remain unchanged when read', () {
+    final stored = <String, dynamic>{
+      'season': 'Autumn',
+      'undertone': 'Warm',
+      'questionnaireAnswers': {
+        '0': 'Green',
+        '1': 'Gold',
+        '2': 'Tans easily, rarely burns',
+        '3': 'Muted',
+      },
+      'warm_question': 1.0,
+      'cool_question': 0.0,
+      'warm_score': 1.0,
+      'cool_score': 0.0,
+      'warm_total': 1.0,
+      'cool_total': 0.0,
+    };
+    final originalAnswers = Map<String, dynamic>.from(
+      stored['questionnaireAnswers'] as Map,
+    );
+    final entry = AnalysisHistoryEntry.fromFirestore(
+      _Document('legacy-full', stored),
+    );
+    expect(entry.season, SeasonKey.Autumn);
+    expect(UndertoneUtils.label(entry.analysis), 'Warm');
+    expect(entry.analysis['questionnaireAnswers'], originalAnswers);
+    expect(entry.analysis['warm_question'], 1.0);
+    expect(entry.analysis, stored);
+    expect(stored['questionnaireAnswers'], originalAnswers);
+  });
 
   test(
     'legacy Q4 answers and absent answers never remap or reject saved seasons',

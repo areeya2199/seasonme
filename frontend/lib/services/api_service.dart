@@ -78,9 +78,7 @@ class ApiService {
       ),
     );
 
-    request.fields["answers"] = jsonEncode(
-      answers.map((key, value) => MapEntry(key.toString(), value)),
-    );
+    request.fields["answers"] = jsonEncode({'3': answers[3]});
 
     final response = await (_client?.send(request) ?? request.send());
 
@@ -91,7 +89,7 @@ class ApiService {
     } else if (response.statusCode == 422) {
       await response.stream.drain<void>();
       throw const AnalysisInputException(
-        'Your answers could not be accepted. Please check question 4 and try again.',
+        'Your answer could not be accepted. Please choose Bright or Muted and try again.',
       );
     } else {
       await response.stream.drain<void>();

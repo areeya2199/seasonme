@@ -10,13 +10,6 @@ app = FastAPI()
 
 
 ALLOWED_ANSWERS = {
-    "0": {"Blue / Purple", "Green", "A mix of both"},
-    "1": {"Gold", "Silver", "Both look fine"},
-    "2": {
-        "Tans easily, rarely burns",
-        "Burns easily, rarely tans",
-        "A little of both",
-    },
     "3": {"Bright", "Muted"},
 }
 
@@ -49,12 +42,12 @@ def parse_answers(raw_answers: str):
         if key == "3" and value is None:
             raise HTTPException(
                 status_code=422,
-                detail="Answer 3 is required: choose Bright or Muted",
+                detail="Q4 (answer key 3) is required: choose Bright or Muted",
             )
         if value is not None and not isinstance(value, str):
             raise HTTPException(
                 status_code=422,
-                detail=f"Answer {key} must be a string or null",
+                detail=f"Answer {key} must be a string",
             )
         if value is not None and value not in allowed_values:
             raise HTTPException(
@@ -83,22 +76,23 @@ async def analyze(
     answers: str = Form(...)
 ):
     answers = parse_answers(answers)
-    print(answers)
     contents = await file.read()
+    if not contents:
+        return {"error": "Invalid image"}
     np_image = np.frombuffer(
         contents,
         np.uint8
     )
-    image = cv2.imdecode(
-        np_image,
-        cv2.IMREAD_COLOR
-    )
+    try:
+        image = cv2.imdecode(np_image, cv2.IMREAD_COLOR)
+    except cv2.error:
+        return {"error": "Invalid image"}
     if image is None:
         return {
             "error": "Invalid image"
         }
-    print("ANSWER:", answers)
-    result = analyze_skin(image, answers)
+    result = analyze_skin(image, answers["3"])
+
 
 
     return result

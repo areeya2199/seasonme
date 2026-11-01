@@ -20,9 +20,14 @@ class AnalysisInput {
       colorPreferences.contains(answers[3]);
 
   static void validateAnswers(Map<int, String?> answers) {
+    if (answers.keys.any((key) => key != 3)) {
+      throw const AnalysisInputException(
+        'Only the Bright/Muted answer is supported. Please restart the analysis.',
+      );
+    }
     if (!hasColorPreference(answers)) {
       throw const AnalysisInputException(
-        'Please choose Bright or Muted in question 4 before continuing.',
+        'Please choose Bright or Muted before continuing.',
       );
     }
   }

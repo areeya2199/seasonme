@@ -22,7 +22,7 @@ class UploadImageOrientationTests(unittest.TestCase):
         self.assertTrue(encoded)
         original = jpeg.tobytes()
         decoded = cv2.imdecode(jpeg, cv2.IMREAD_COLOR)
-        answers = {"0": None, "1": "Silver", "2": None, "3": "Muted"}
+        answers = {"3": "Muted"}
 
         with (
             tempfile.TemporaryDirectory(prefix="seasonme-upload-") as directory,
@@ -46,9 +46,9 @@ class UploadImageOrientationTests(unittest.TestCase):
                     file.write_bytes(contents)
                     expected = decoded if rotation is None else cv2.rotate(decoded, rotation)
 
-                    def analyze_image(image, received_answers):
+                    def analyze_image(image, preference):
                         np.testing.assert_array_equal(image, expected)
-                        self.assertEqual(received_answers, answers)
+                        self.assertEqual(preference, answers["3"])
                         return {"season": "Summer", "undertone": "Cool"}
 
                     with patch("main.analyze_skin", side_effect=analyze_image) as analyze:

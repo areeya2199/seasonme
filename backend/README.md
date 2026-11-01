@@ -1,8 +1,109 @@
+# Image-only undertone experiment
+
+This experiment starts from `1b3d7e7` on `experiment/image-only`. Undertone now
+uses the existing cheek-image pipeline alone. Q4 remains required and is used
+only to select a season after undertone classification.
+
+## API contract
+
+`POST /analyze` still accepts multipart `file` (the original encoded photo) and
+`answers` (a JSON string), with `Authorization: Bearer <Firebase ID token>`.
+
+Before, answers could contain keys `0`, `1`, `2`, `3`, with Q1-Q3 optional:
+
+```json
+{"0": "Green", "1": "Silver", "2": null, "3": "Bright"}
+```
+
+Now the only supported payload is `{"3":"Bright"}` or `{"3":"Muted"}`.
+The canonical Q4 key stays `3` even though the UI shows a single question.
+Missing/invalid Q4, malformed JSON, non-object JSON and any extra answer key
+(including Q1-Q3 with null values) return 422 before image processing. An old
+client sending all four keys must continue using its original backend; the
+experimental Flutter client and API must be used together.
+
+The image path is unchanged: OpenCV decode, BGR-to-RGB for MediaPipe, the same
+10 landmarks per cheek, the same combined polygon mask, BGR/HSV/Lab means,
+OpenCV Lab scale conversion, and `degrees(atan2(b*, a*))` normalized to [0, 360).
+The unrounded hue angle is **Warm if greater than 60 degrees; otherwise Cool**.
+No threshold, landmark, color-space or season-mapping changes were made.
+
+| Image undertone | Q4 | Season |
+| --- | --- | --- |
+| Cool | Bright | Winter |
+| Cool | Muted | Summer |
+| Warm | Bright | Spring |
+| Warm | Muted | Autumn |
+
+The response retains `undertone`, `season`, `hue_angle`, `rgb`, `hsv`, `lab`,
+`lightness_group` and `chroma_group`. `warm_score`/`cool_score` are now binary
+image votes (1/0); `warm_total`/`cool_total` remain aliases for the existing
+history writer. These scores are not confidence or accuracy percentages.
+`questionnaire`, `answered_count`, `questionnaire_weight` and `image_weight`
+have been removed from the response and their calculations have been deleted.
+
+Missing multipart fields return 422. Empty/corrupt images and OpenCV decoding
+exceptions return the existing HTTP 200 `{"error":"Invalid image"}` contract;
+no detected face returns HTTP 200 `{"error":"No face detected"}`. Flutter
+already handles both error bodies without opening or saving a result.
+Authentication and its 401/503 behavior remain unchanged.
+
+## History compatibility and limits
+
+The existing Firestore writer, collections, schema version (2), document field
+names, Storage paths and rules are unchanged. New `questionnaireAnswers` maps
+contain only key `3`. The existing writer handles the absent questionnaire
+scores by saving `warm_question` and `cool_question` as null. Old documents keep
+their original Q1-Q4 answers and scores; history displays saved undertone and
+season without recomputing them. No migration or cloud-data changes are needed.
+
+The original image vote had at least 70% weight and answers at most 30%, so valid
+Q1-Q3 answers could not overturn the binary image vote. Removing fusion should
+preserve undertone/season for the same image and Q4, while reported scores change.
+This experiment does not calibrate lighting, makeup, white balance, mask quality
+or the 60-degree threshold, and does not establish clinical/colorimetric accuracy.
+
+Tests in `tests/test_questionnaire.py` cover Q4-only validation, the exact hue
+boundary, all four seasons through multipart decoding and color analysis, Q4
+independence, real MediaPipe face/no-face fixtures and image errors. Auth and
+EXIF-orientation regressions remain in their existing suites. Flutter tests
+cover the one-question UI, unchanged swatches/photo, Q4 validation and multipart,
+and reading old/new history. Live Firebase tokens, cloud saves/reads and mobile
+device camera flows still require manual verification; mocks cannot certify them.
+The older deployment/test results below describe the pre-experiment baseline.
+
+## Verification on 2026-11-01
+
+- Backend: `python -B -m unittest discover -s tests -v` passed all 32 tests.
+- Flutter: the questionnaire, API, questionnaire-history, upload, history-save
+  and image-storage suites passed all 42 tests.
+- Full Flutter suite: 112 passed, 43 failed. The same 43 failure names reproduce
+  from an isolated Git archive of starting commit `1b3d7e7`: 19 in
+  `preview_ui_test.dart`, 24 in `result_screen_test.dart`. The existing Result
+  and Palette implementation and these two test files were not modified.
+  This is not a fully passing Flutter regression suite.
+- The Upload tests now wait for the Q4 photo to finish loading before deleting
+  temporary files; otherwise Windows correctly rejects deleting an open file.
+- Image-pipeline AST statements through hue computation match the starting
+  commit. On `frontend/assets/person.png`, RGB/HSV/Lab, hue (53.06 degrees),
+  Cool undertone and Winter/Summer match the pre-change results for both Q4
+  choices and both fully answered/skipped legacy answer sets. New image votes
+  are Warm=0, Cool=1; old fully answered fusion scores were 0.15/0.85.
+- Scoped Dart analysis reports four inherited `withOpacity` deprecation infos
+  in the preserved Q4 styling, with no errors or warnings.
+
+The first sandboxed TestClient/formatter attempts stalled and were stopped;
+verification then ran successfully outside that sandbox without installing or
+upgrading dependencies. MediaPipe native inference notices and the existing
+Starlette/httpx deprecation notice remain. No live Firebase data, real-user token,
+device camera or deployment was exercised. These checks and the existing Flutter
+failures remain follow-up work before a production merge.
+
 # Local Firebase authentication
 
 `GET /` remains public. `POST /analyze` requires a Firebase ID token in
 `Authorization: Bearer <token>`. Missing, invalid and expired tokens return 401
-before image decoding or analysis. Successful analysis JSON is unchanged.
+before image decoding or analysis. Authentication does not modify analysis JSON.
 Credential/configuration and certificate-fetch failures return 503 and never
 allow analysis through.
 

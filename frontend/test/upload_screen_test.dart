@@ -124,6 +124,23 @@ void main() {
         );
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
+        // The single-question screen now starts reading/decoding immediately.
+        // Wait for it before teardown deletes the source file on Windows.
+        for (
+          var attempt = 0;
+          attempt < 100 &&
+              find.text('Loading your photo…').evaluate().isNotEmpty;
+          attempt++
+        ) {
+          await tester.runAsync(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          });
+          await tester.pump();
+        }
+        expect(
+          find.byKey(const ValueKey('questionnaire-user-photo')),
+          findsOneWidget,
+        );
         expect(
           tester
               .widget<QuestionnaireScreen>(find.byType(QuestionnaireScreen))

@@ -31,12 +31,7 @@ void main() {
       () async {
         final sourcePhoto = File('${directory.path}/$source.jpg')
           ..writeAsBytesSync(originalBytes);
-        final answers = <int, String?>{
-          0: null,
-          1: 'Silver',
-          2: null,
-          3: 'Bright',
-        };
+        final answers = <int, String?>{3: 'Bright'};
         var requests = 0;
         final client = MockClient((request) async {
           requests++;
@@ -52,12 +47,7 @@ void main() {
           expect(body, contains('filename="$source.jpg"'));
           expect(body, contains(latin1.decode(originalBytes)));
           expect(body, contains('name="answers"'));
-          expect(
-            body,
-            contains(
-              jsonEncode({'0': null, '1': 'Silver', '2': null, '3': 'Bright'}),
-            ),
-          );
+          expect(body, contains(jsonEncode({'3': 'Bright'})));
           return http.Response(
             jsonEncode({'season': 'Winter', 'undertone': 'Cool'}),
             200,
@@ -98,6 +88,42 @@ void main() {
         throwsA(isA<AnalysisInputException>()),
       );
     }
+  });
+
+  test('removed answer keys are rejected before auth or transport', () async {
+    final client = MockClient((_) async => throw StateError('Must not send'));
+    addTearDown(client.close);
+    final api = ApiService(
+      client: client,
+      idTokenProvider: () async => throw StateError('Must not authenticate'),
+    );
+    for (final key in [0, 1, 2, 4]) {
+      await expectLater(
+        api.analyzeImage(photo.path, {key: null, 3: 'Bright'}),
+        throwsA(isA<AnalysisInputException>()),
+      );
+    }
+  });
+
+  test('Muted keeps key 3 and no other answers in multipart', () async {
+    final client = MockClient((request) async {
+      final body = latin1.decode(request.bodyBytes);
+      expect(body, contains(jsonEncode({'3': 'Muted'})));
+      for (final removed in ['"0":', '"1":', '"2":']) {
+        expect(body, isNot(contains(removed)));
+      }
+      expect(request.headers['Authorization'], 'Bearer test-token');
+      return http.Response('{"season":"Summer","undertone":"Cool"}', 200);
+    });
+    addTearDown(client.close);
+    final api = ApiService(
+      client: client,
+      idTokenProvider: () async => 'test-token',
+    );
+    expect(await api.analyzeImage(photo.path, {3: 'Muted'}), {
+      'season': 'Summer',
+      'undertone': 'Cool',
+    });
   });
 
   test('missing, empty and corrupt sources cannot be sent', () async {

@@ -1,17 +1,19 @@
-import asyncio
 import json
+import math
+from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import cv2
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import numpy as np
 
-from main import app, analyze, parse_answers
+from main import app, parse_answers
 from services.auth import require_firebase_user
 from services.analysis import (
-    _calculate_questionnaire_scores,
+    _classify_undertone,
     _select_season,
     analyze_skin,
     left_cheek,
@@ -19,85 +21,81 @@ from services.analysis import (
 )
 
 
-class QuestionnaireScoringTests(unittest.TestCase):
-    def test_all_undertone_questions_answered(self):
-        result = _calculate_questionnaire_scores({
-            "0": "Green",
-            "1": "Silver",
-            "2": "A little of both",
-        })
+def cheek_detector():
+    landmarks = [SimpleNamespace(x=0.5, y=0.5) for _ in range(478)]
+    for center, indices in ((0.3, left_cheek), (0.7, right_cheek)):
+        for offset, index in enumerate(indices):
+            angle = offset * 2 * np.pi / len(indices)
+            landmarks[index] = SimpleNamespace(
+                x=center + 0.1 * np.cos(angle),
+                y=0.5 + 0.2 * np.sin(angle),
+            )
+    return SimpleNamespace(detect=lambda _: SimpleNamespace(face_landmarks=[landmarks]))
 
-        self.assertEqual(result["answered_count"], 3)
-        self.assertAlmostEqual(result["warm"], 0.5)
-        self.assertAlmostEqual(result["cool"], 0.5)
-        self.assertAlmostEqual(result["questionnaire_weight"], 0.30)
-        self.assertAlmostEqual(result["image_weight"], 0.70)
 
-    def test_skip_q1(self):
-        result = _calculate_questionnaire_scores({
-            "0": None,
-            "1": "Gold",
-            "2": "A little of both",
-        })
+class ImageOnlyAnalysisTests(unittest.TestCase):
+    def test_original_hue_threshold_including_exact_boundary(self):
+        for angle, expected in [
+            (0, "Cool"), (math.nextafter(60, 0), "Cool"), (60, "Cool"),
+            (math.nextafter(60, 360), "Warm"), (90, "Warm"), (359, "Warm"),
+        ]:
+            with self.subTest(angle=angle):
+                self.assertEqual(_classify_undertone(angle), expected)
 
-        self.assertEqual(result["answered_count"], 2)
-        self.assertAlmostEqual(result["warm"], 0.75)
-        self.assertAlmostEqual(result["cool"], 0.25)
-        self.assertAlmostEqual(result["questionnaire_weight"], 0.20)
-        self.assertAlmostEqual(result["image_weight"], 0.80)
+    def test_q4_changes_only_season_in_full_analysis(self):
+        for bgr, undertone in [((120, 170, 190), "Warm"), ((100, 100, 200), "Cool")]:
+            image = np.full((64, 64, 3), bgr, dtype=np.uint8)
+            original = image.copy()
+            with self.subTest(undertone=undertone), patch(
+                "services.analysis.landmarker", cheek_detector(),
+            ):
+                bright = analyze_skin(image, "Bright")
+                muted = analyze_skin(image, "Muted")
+            self.assertEqual(bright["undertone"], undertone)
+            self.assertEqual(bright["season"], _select_season(undertone, "Bright"))
+            self.assertEqual(muted["season"], _select_season(undertone, "Muted"))
+            self.assertEqual(
+                {k: v for k, v in bright.items() if k != "season"},
+                {k: v for k, v in muted.items() if k != "season"},
+            )
+            self.assertEqual(bright["warm_score"], int(undertone == "Warm"))
+            self.assertEqual(bright["cool_score"], int(undertone == "Cool"))
+            self.assertEqual(bright["warm_total"], bright["warm_score"])
+            self.assertEqual(bright["cool_total"], bright["cool_score"])
+            self.assertTrue({
+                "questionnaire", "answered_count", "questionnaire_weight", "image_weight",
+            }.isdisjoint(bright))
+            np.testing.assert_array_equal(image, original)
 
-    def test_skip_q2(self):
-        result = _calculate_questionnaire_scores({
-            "0": "Blue / Purple",
-            "1": None,
-            "2": "A little of both",
-        })
+    def test_real_mediapipe_face_fixture_and_q4(self):
+        image_path = Path(__file__).resolve().parents[2] / "frontend/assets/person.png"
+        image = cv2.imread(str(image_path))
+        self.assertIsNotNone(image)
+        bright = analyze_skin(image, "Bright")
+        muted = analyze_skin(image, "Muted")
+        self.assertEqual(bright["undertone"], "Cool")
+        self.assertEqual(bright["season"], "Winter")
+        self.assertEqual(muted["season"], "Summer")
+        self.assertEqual(bright["hue_angle"], muted["hue_angle"])
+        self.assertEqual(bright["lab"], muted["lab"])
 
-        self.assertEqual(result["answered_count"], 2)
-        self.assertAlmostEqual(result["warm"], 0.25)
-        self.assertAlmostEqual(result["cool"], 0.75)
+    def test_real_mediapipe_blank_image_has_no_face(self):
+        self.assertEqual(
+            analyze_skin(np.zeros((64, 64, 3), dtype=np.uint8), "Bright"),
+            {"error": "No face detected"},
+        )
 
-    def test_skip_q1_and_q2(self):
-        result = _calculate_questionnaire_scores({
-            "0": None,
-            "1": None,
-            "2": "Tans easily, rarely burns",
-        })
-
-        self.assertEqual(result["answered_count"], 1)
-        self.assertAlmostEqual(result["warm"], 1.0)
-        self.assertAlmostEqual(result["cool"], 0.0)
-        self.assertAlmostEqual(result["questionnaire_weight"], 0.10)
-        self.assertAlmostEqual(result["image_weight"], 0.90)
-
-    def test_skip_all_undertone_questions(self):
-        result = _calculate_questionnaire_scores({
-            "0": None,
-            "1": None,
-            "2": None,
-        })
-
-        self.assertEqual(result["answered_count"], 0)
-        self.assertAlmostEqual(result["warm"], 0.5)
-        self.assertAlmostEqual(result["cool"], 0.5)
-        self.assertAlmostEqual(result["questionnaire_weight"], 0.0)
-        self.assertAlmostEqual(result["image_weight"], 1.0)
-
-    def test_skip_undertone_questions_with_required_q4(self):
-        answers = {"0": None, "1": None, "2": None, "3": "Muted"}
-        result = _calculate_questionnaire_scores(answers)
-
-        self.assertEqual(result["answered_count"], 0)
-        self.assertEqual(_select_season("Warm", answers["3"]), "Autumn")
+    def test_missing_q4_never_selects_a_season(self):
+        with patch("services.analysis.landmarker", cheek_detector()):
+            with self.assertRaises(ValueError):
+                analyze_skin(np.full((64, 64, 3), 128, dtype=np.uint8), None)
 
 
 class SeasonSelectionTests(unittest.TestCase):
     def test_four_season_combinations(self):
         for undertone, preference, expected in [
-            ("Cool", "Bright", "Winter"),
-            ("Cool", "Muted", "Summer"),
-            ("Warm", "Bright", "Spring"),
-            ("Warm", "Muted", "Autumn"),
+            ("Cool", "Bright", "Winter"), ("Cool", "Muted", "Summer"),
+            ("Warm", "Bright", "Spring"), ("Warm", "Muted", "Autumn"),
         ]:
             with self.subTest(undertone=undertone, preference=preference):
                 self.assertEqual(_select_season(undertone, preference), expected)
@@ -110,153 +108,120 @@ class SeasonSelectionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     _select_season(undertone, preference)
 
-    def test_q4_changes_only_season_in_full_analysis(self):
-        # Keep real image/color/scoring code; replace only face detection with
-        # fixed cheek polygons so this regression does not depend on a photo.
-        landmarks = [SimpleNamespace(x=0.5, y=0.5) for _ in range(478)]
-        for indices in (left_cheek, right_cheek):
-            for offset, index in enumerate(indices):
-                angle = offset * 2 * np.pi / len(indices)
-                landmarks[index] = SimpleNamespace(
-                    x=0.5 + 0.2 * np.cos(angle),
-                    y=0.5 + 0.2 * np.sin(angle),
-                )
-        detector = SimpleNamespace(
-            detect=lambda _: SimpleNamespace(face_landmarks=[landmarks]),
-        )
-        for bgr, undertone in [((120, 170, 190), "Warm"), ((100, 100, 200), "Cool")]:
-            for answered in range(4):
-                answers = {"0": None, "1": None, "2": None}
-                for key, value in list({
-                    "0": "Green", "1": "Silver", "2": "A little of both",
-                }.items())[:answered]:
-                    answers[key] = value
-                image = np.full((64, 64, 3), bgr, dtype=np.uint8)
-                original = image.copy()
-                with self.subTest(undertone=undertone, answered=answered), patch(
-                    "services.analysis.landmarker", detector,
-                ):
-                    bright = analyze_skin(image, {**answers, "3": "Bright"})
-                    muted = analyze_skin(image, {**answers, "3": "Muted"})
-                    self.assertEqual(bright["undertone"], undertone)
-                    self.assertEqual(bright["season"], _select_season(undertone, "Bright"))
-                    self.assertEqual(muted["season"], _select_season(undertone, "Muted"))
-                    self.assertEqual(
-                        {k: v for k, v in bright.items() if k != "season"},
-                        {k: v for k, v in muted.items() if k != "season"},
-                    )
-                    self.assertEqual(bright["answered_count"], answered)
-                    self.assertAlmostEqual(bright["questionnaire_weight"], answered * 0.1)
-                    self.assertAlmostEqual(bright["image_weight"], 1 - answered * 0.1)
-                    np.testing.assert_array_equal(image, original)
-
 
 class QuestionnaireValidationTests(unittest.TestCase):
-    def test_invalid_answer_is_rejected(self):
-        with self.assertRaises(HTTPException) as context:
-            parse_answers(json.dumps({"1": "Bronze"}))
+    def test_only_q4_is_required_and_preserves_key_3(self):
+        for value in ("Bright", "Muted"):
+            self.assertEqual(parse_answers(json.dumps({"3": value})), {"3": value})
 
-        self.assertEqual(context.exception.status_code, 422)
-
-    def test_missing_keys_are_normalized_to_null(self):
-        result = parse_answers(json.dumps({"0": "Green", "3": "Bright"}))
-
-        self.assertEqual(result, {
-            "0": "Green",
-            "1": None,
-            "2": None,
-            "3": "Bright",
-        })
-
-    def test_q4_is_required_and_accepts_only_canonical_values(self):
-        payloads = [{}, *({"3": value} for value in [
+    def test_q4_accepts_only_canonical_values(self):
+        for payload in [{}, *({"3": value} for value in [
             None, "", "bright", "muted", "Bright & vivid", "Soft & muted",
             "Deep & rich", 1, True, [], {},
-        ])]
-        for payload in payloads:
+        ])]:
             with self.subTest(payload=payload), self.assertRaises(HTTPException) as context:
                 parse_answers(json.dumps(payload))
             self.assertEqual(context.exception.status_code, 422)
-        for value in ("Bright", "Muted"):
-            self.assertEqual(parse_answers(json.dumps({"3": value})), {
-                "0": None, "1": None, "2": None, "3": value,
-            })
 
-    def test_malformed_answers_are_rejected(self):
-        with self.assertRaises(HTTPException) as context:
-            parse_answers("{not-json")
+    def test_removed_questions_are_rejected_even_when_null(self):
+        for key in ("0", "1", "2", "4"):
+            for value in (None, "Green"):
+                with self.subTest(key=key, value=value), self.assertRaises(HTTPException) as context:
+                    parse_answers(json.dumps({"3": "Bright", key: value}))
+                self.assertEqual(context.exception.status_code, 422)
 
-        self.assertEqual(context.exception.status_code, 422)
-
-    def test_non_object_answers_are_rejected(self):
-        with self.assertRaises(HTTPException) as context:
-            parse_answers(json.dumps(["Green", None, None, None]))
-
-        self.assertEqual(context.exception.status_code, 422)
-
-    def test_non_string_answer_is_rejected(self):
-        with self.assertRaises(HTTPException) as context:
-            parse_answers(json.dumps({"0": 1}))
-
-        self.assertEqual(context.exception.status_code, 422)
-
-    def test_unsupported_key_is_rejected(self):
-        with self.assertRaises(HTTPException) as context:
-            parse_answers(json.dumps({"4": None}))
-
-        self.assertEqual(context.exception.status_code, 422)
+    def test_malformed_or_non_object_answers_are_rejected(self):
+        for raw in ("{not-json", "null", "[]", '"Bright"', "42"):
+            with self.subTest(raw=raw), self.assertRaises(HTTPException) as context:
+                parse_answers(raw)
+            self.assertEqual(context.exception.status_code, 422)
 
 
 class AnalyzeEndpointTests(unittest.TestCase):
-    def test_null_answers_reach_analysis_as_normalized_values(self):
-        class FakeUploadFile:
-            async def read(self):
-                return b"image-bytes"
-
-        payload = json.dumps({
-            "0": None,
-            "1": "Silver",
-            "2": None,
-            "3": "Muted",
-        })
-        expected_answers = {
-            "0": None,
-            "1": "Silver",
-            "2": None,
-            "3": "Muted",
-        }
-
-        with (
-            patch(
-                "main.cv2.imdecode",
-                return_value=np.zeros((1, 1, 3), dtype=np.uint8),
-            ),
-            patch(
-                "main.analyze_skin",
-                return_value={"season": "Summer", "undertone": "Cool"},
-            ) as analyze_skin,
-        ):
-            result = asyncio.run(analyze(FakeUploadFile(), payload))
-
-        self.assertEqual(result["season"], "Summer")
-        self.assertEqual(analyze_skin.call_args.args[1], expected_answers)
-
-    def test_http_rejects_missing_q4_before_decoding_or_analysis(self):
+    def setUp(self):
         app.dependency_overrides[require_firebase_user] = lambda: {"uid": "test-user"}
-        try:
-            with TestClient(app) as client, patch("main.cv2.imdecode") as decode, patch(
-                "main.analyze_skin",
-            ) as analysis:
-                for payload in ({}, {"3": None}, {"3": "Deep & rich"}):
-                    response = client.post(
-                        "/analyze", files={"file": ("face.jpg", b"photo", "image/jpeg")},
-                        data={"answers": json.dumps(payload)},
-                    )
-                    self.assertEqual(response.status_code, 422)
-                decode.assert_not_called()
-                analysis.assert_not_called()
-        finally:
-            app.dependency_overrides.pop(require_firebase_user, None)
+        self.addCleanup(app.dependency_overrides.pop, require_firebase_user, None)
+        self.client = TestClient(app)
+        self.addCleanup(self.client.close)
+
+    def post_image(self, contents=b"photo", answers=None):
+        return self.client.post(
+            "/analyze", files={"file": ("face.png", contents, "image/png")},
+            data={"answers": json.dumps({"3": "Bright"} if answers is None else answers)},
+        )
+
+    def test_only_q4_value_reaches_analysis(self):
+        image = np.zeros((64, 64, 3), dtype=np.uint8)
+        with patch("main.cv2.imdecode", return_value=image), patch(
+            "main.analyze_skin", return_value={"season": "Summer", "undertone": "Cool"},
+        ) as analysis:
+            response = self.post_image(answers={"3": "Muted"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"season": "Summer", "undertone": "Cool"})
+        self.assertIs(analysis.call_args.args[0], image)
+        self.assertEqual(analysis.call_args.args[1], "Muted")
+
+    def test_http_rejects_missing_invalid_q4_and_removed_keys_before_decoding(self):
+        with patch("main.cv2.imdecode") as decode, patch("main.analyze_skin") as analysis:
+            for payload in ({}, {"3": None}, {"3": "Deep & rich"}, *(
+                {"3": "Bright", key: None} for key in ("0", "1", "2")
+            )):
+                with self.subTest(payload=payload):
+                    self.assertEqual(self.post_image(answers=payload).status_code, 422)
+            decode.assert_not_called()
+            analysis.assert_not_called()
+
+    def test_missing_image_or_answers_is_422(self):
+        with patch("main.analyze_skin") as analysis:
+            self.assertEqual(self.client.post(
+                "/analyze", data={"answers": json.dumps({"3": "Bright"})},
+            ).status_code, 422)
+            self.assertEqual(self.client.post(
+                "/analyze", files={"file": ("face.png", b"photo", "image/png")},
+            ).status_code, 422)
+            analysis.assert_not_called()
+
+    def test_empty_corrupt_and_truncated_images_keep_error_contract(self):
+        with patch("main.analyze_skin") as analysis:
+            for contents in (b"", b"not an image", bytes.fromhex("89504e470d0a1a0a")):
+                with self.subTest(contents=contents):
+                    response = self.post_image(contents)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json(), {"error": "Invalid image"})
+            analysis.assert_not_called()
+
+    def test_opencv_decode_exception_is_an_invalid_image(self):
+        with patch("main.cv2.imdecode", side_effect=cv2.error("decode failed")), patch(
+            "main.analyze_skin",
+        ) as analysis:
+            response = self.post_image()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {"error": "Invalid image"})
+            analysis.assert_not_called()
+
+    def test_http_no_face_preserves_error_contract(self):
+        _, encoded = cv2.imencode(".png", np.zeros((64, 64, 3), dtype=np.uint8))
+        response = self.post_image(encoded.tobytes())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"error": "No face detected"})
+
+    def test_decode_color_pipeline_and_season_mapping_over_multipart(self):
+        for bgr, preference, undertone, season in [
+            ((120, 170, 190), "Bright", "Warm", "Spring"),
+            ((120, 170, 190), "Muted", "Warm", "Autumn"),
+            ((100, 100, 200), "Bright", "Cool", "Winter"),
+            ((100, 100, 200), "Muted", "Cool", "Summer"),
+        ]:
+            _, encoded = cv2.imencode(".png", np.full((64, 64, 3), bgr, dtype=np.uint8))
+            with self.subTest(season=season), patch(
+                "services.analysis.landmarker", cheek_detector(),
+            ):
+                response = self.post_image(encoded.tobytes(), {"3": preference})
+            self.assertEqual(response.status_code, 200)
+            result = response.json()
+            self.assertEqual(result["undertone"], undertone)
+            self.assertEqual(result["season"], season)
+            self.assertEqual(result["rgb"], dict(zip(("b", "g", "r"), bgr)))
 
 
 if __name__ == "__main__":

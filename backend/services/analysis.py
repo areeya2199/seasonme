@@ -47,68 +47,10 @@ right_cheek = [
     345, 346, 347, 348, 329
 ]
 
-#คิดคะแนนจากคำตอบของแบบสอบถาม
-def _calculate_questionnaire_scores(answers):
-    # รับ answers เป็น dictionary รหัส "0"–"2" คือคำถามข้อ 1–3
-    # คะแนนแต่ละตัวเลือกเรียงเป็น (Warm, Cool); ข้อ 4 ไม่รวมในตารางนี้
-    score_map = {
-        "0": {
-            "Green": (1.0, 0.0),
-            "Blue / Purple": (0.0, 1.0),
-            "A mix of both": (0.5, 0.5),
-        },
-        "1": {
-            "Gold": (1.0, 0.0),
-            "Silver": (0.0, 1.0),
-            "Both look fine": (0.5, 0.5),
-        },
-        "2": {
-            "Tans easily, rarely burns": (1.0, 0.0),
-            "Burns easily, rarely tans": (0.0, 1.0),
-            "A little of both": (0.5, 0.5),
-        },
-    }
+def _classify_undertone(hue_angle):
+    """Apply the existing image hue threshold; no questionnaire input."""
+    return "Warm" if hue_angle > 60 else "Cool"
 
-    # เริ่มคะแนนสะสมและจำนวนข้อที่ตอบ โดยยังไม่คิดน้ำหนักรวมกับภาพ
-    warm_score = 0.0
-    cool_score = 0.0
-    answered_count = 0
-
-    for key, answer_scores in score_map.items():
-        answer = answers.get(key)
-        # null จาก JSON เป็น None ใน Python: Skip ทั้งคะแนนและการนับข้อนี้
-        if answer is None:
-            continue
-        # ดึงคะแนนตามตัวเลือก แล้วสะสมคะแนนของสองฝั่งและจำนวนข้อที่ตอบ
-        warm_points, cool_points = answer_scores[answer]
-        warm_score += warm_points
-        cool_score += cool_points
-        answered_count += 1
-    
-    if answered_count == 0:
-        # ไม่มีคำตอบให้เฉลี่ย จึงตั้งค่ากึ่งกลางเพื่อหลีกเลี่ยงการหารด้วยศูนย์
-        # น้ำหนักคำตอบจะเป็น 0 ทำให้ค่ากึ่งกลางนี้ไม่มีผลต่อคะแนนรวม
-        warm_question = 0.5
-        cool_question = 0.5
-    else:
-        # หาคะแนนเฉลี่ยจากจำนวนข้อที่ตอบจริง ไม่รวมข้อที่ Skip
-        warm_question = warm_score / answered_count
-        cool_question = cool_score / answered_count
-
-    
-    # ตอบข้อ 1–3 ครบให้น้ำหนักคำตอบ 30%; ตอบ 2/1/0 ข้อให้ 20%/10%/0%
-    questionnaire_weight = 0.30 * (answered_count / 3)
-    # น้ำหนักที่เหลือเป็นของภาพ เพื่อให้น้ำหนักสองส่วนรวมกันเท่ากับ 1
-    image_weight = 1.0 - questionnaire_weight
-
-    # ส่งคะแนนเฉลี่ย จำนวนข้อที่ตอบ และน้ำหนักกลับไปใช้ใน analyze_skin()
-    return {
-        "warm": warm_question,
-        "cool": cool_question,
-        "answered_count": answered_count,
-        "questionnaire_weight": questionnaire_weight,
-        "image_weight": image_weight,
-    }
 
 def _select_season(undertone, preference):
     # ใช้ Undertone ร่วมกับคำตอบข้อ 4 (Bright/Muted) เลือกหนึ่งในสี่ฤดู
@@ -129,8 +71,8 @@ def _select_season(undertone, preference):
     raise ValueError("Season requires Warm/Cool and Bright/Muted")
 
 #วิเคราะห์ภาพ
-def analyze_skin(image, answers):
-    # รับ image เป็นอาร์เรย์ภาพ BGR จาก OpenCV และ answers เป็น dictionary
+def analyze_skin(image, preference):
+    # Undertone uses image measurements only; Q4 is used only by _select_season.
     # resize
     # คำสั่ง resize ด้านล่างถูกคอมเมนต์ไว้ จึงไม่ได้ย่อหรือขยายภาพในขั้นนี้
     #imageresize = cv2.resize(image, (640, 680))
@@ -279,98 +221,22 @@ def analyze_skin(image, answers):
 
     
 
-    # คำนวณคะแนนเฉลี่ยคำตอบข้อ 1–3 พร้อมน้ำหนักที่ปรับตามจำนวนข้อที่ตอบ
-    questionnaire = _calculate_questionnaire_scores(answers)
+    undertone = _classify_undertone(hue_angle)
+    image_warm = int(undertone == "Warm")
+    image_cool = int(undertone == "Cool")
 
-    # เกณฑ์ของระบบ: มุมมากกว่า 60 ให้ภาพโหวต Warm; ไม่เกิน 60 โหวต Cool
-    # เป็นคะแนน 1/0 ของภาพก่อนรวมคำตอบ ไม่ใช่เปอร์เซ็นต์ความแม่นยำ
-    if hue_angle > 60:
-        image_warm = 1
-        image_cool = 0
-    else:
-        image_warm = 0
-        image_cool = 1
-
-
-
-    # ดึงข้อมูลจาก helper มาใช้รวมคะแนนภาพกับคำตอบ
-    warm_question = questionnaire["warm"]
-    cool_question = questionnaire["cool"]
-    answered_count = questionnaire["answered_count"]
-    questionnaire_weight = questionnaire["questionnaire_weight"]
-    image_weight = questionnaire["image_weight"]
-
-    print("warm_question =", warm_question)
-    print("cool_question =", cool_question)
-
-# ---------------- Weighted Fusion ----------------
-# Image weight starts at 70%; questionnaire weight is at most 30% and
-# decreases by 10 percentage points for each skipped Q1-Q3 answer.
-
-    # คะแนนรวมแต่ละฝั่ง = คะแนนภาพ × น้ำหนักภาพ + คะแนนคำตอบเฉลี่ย × น้ำหนักคำตอบ
-    # สูตรปัจจุบันให้น้ำหนักภาพอย่างน้อย 70% และภาพโหวต 1/0
-    # คำตอบข้อ 1–3 จึงเปลี่ยนคะแนนรวมได้ แต่ไม่สามารถพลิกผล Warm/Cool จากภาพ
-    warm_total = (
-        image_warm * image_weight
-        + warm_question * questionnaire_weight
-    )
-    cool_total = (
-        image_cool * image_weight
-        + cool_question * questionnaire_weight
-    )
-
-    print("warm_total =", warm_total)
-    print("cool_total =", cool_total)
-    
-
-
-    # เปรียบเทียบคะแนนรวมเพื่อเลือก Undertone; ถ้าเสมอ เงื่อนไขนี้เลือก Warm
-    if warm_total >= cool_total:
-        undertone = "Warm"
-    else:
-        undertone = "Cool"
-
-    print("undertone =", undertone)
-    
-
-
-    # รหัส "3" คือคำถามข้อ 4 รับ Bright/Muted เพื่อใช้เลือกฤดูแยกจากคะแนนข้อ 1–3
-    preference = answers.get("3")
-
-
-
-
-    # นำ Undertone และคำตอบข้อ 4 ไปเลือก Spring/Summer/Autumn/Winter
+    # Q4 selects a season after image-only undertone classification.
     season = _select_season(undertone, preference)
 
-    print("season =", season)
-
-    # ส่งผลเป็น dictionary ให้ FastAPI แปลงเป็น JSON กลับไปแสดงในแอป
-    # ปัดค่าที่รายงานหลังคำนวณเสร็จ; คะแนนรวมเป็นคะแนนตามสูตร ไม่ใช่ความแม่นยำ
     return {
-
         "undertone": undertone,
-
         "season": season,
-
-        # warm_score/cool_score ในผลลัพธ์นี้คือคะแนนรวมแล้ว ไม่ใช่คะแนนคำตอบอย่างเดียว
-        "warm_score": round(warm_total, 2),
-        "cool_score": round(cool_total, 2),
-        # Explicit aliases make it clear that these are the final combined
-        # scores, rather than the questionnaire-only values below.
-        "warm_total": round(warm_total, 2),
-        "cool_total": round(cool_total, 2),
-
-        # จำนวนข้อที่ตอบนับเฉพาะข้อ 1–3 และรายงานน้ำหนักของทั้งภาพกับคำตอบ
-        "answered_count": answered_count,
-        "questionnaire_weight": round(questionnaire_weight, 2),
-        "image_weight": round(image_weight, 2),
-
-        # คะแนนคำตอบเฉลี่ยก่อนคูณน้ำหนัก แยกจาก warm_total/cool_total
-        "questionnaire": {
-        "warm": round(warm_question, 2),
-        "cool": round(cool_question, 2)
-    },
+        # Binary image votes, not confidence percentages. Keep the existing
+        # score/total aliases for the unchanged history writer.
+        "warm_score": image_warm,
+        "cool_score": image_cool,
+        "warm_total": image_warm,
+        "cool_total": image_cool,
 
         "hue_angle": round(
             hue_angle,

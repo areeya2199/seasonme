@@ -24,10 +24,8 @@ class AuthenticationTests(unittest.TestCase):
         ).start()
         self.analysis_result = {
             "season": "Summer", "undertone": "Cool",
-            "warm_score": 0.15, "cool_score": 0.85,
-            "warm_total": 0.15, "cool_total": 0.85,
-            "answered_count": 3, "questionnaire_weight": 0.3,
-            "image_weight": 0.7, "questionnaire": {"warm": 0.5, "cool": 0.5},
+            "warm_score": 0, "cool_score": 1,
+            "warm_total": 0, "cool_total": 1,
             "hue_angle": 50.0, "rgb": {"r": 190, "g": 150, "b": 140},
             "hsv": {"h": 10, "s": 60, "v": 190},
             "lab": {"L": 70, "a": 12, "b": 14, "chroma": 18.44},
@@ -44,7 +42,7 @@ class AuthenticationTests(unittest.TestCase):
             "/analyze",
             headers=headers,
             files={"file": ("face.jpg", b"image-bytes", "image/jpeg")},
-            data={"answers": json.dumps({"1": "Silver", "3": "Muted"})},
+            data={"answers": json.dumps({"3": "Muted"})},
         )
 
     def assert_blocked(self, response, status=401):
@@ -89,7 +87,7 @@ class AuthenticationTests(unittest.TestCase):
         self.analysis.assert_called_once()
         self.assertEqual(
             self.analysis.call_args.args[1],
-            {"0": None, "1": "Silver", "2": None, "3": "Muted"},
+            "Muted",
         )
 
     def test_valid_token_still_enforces_answer_validation(self):

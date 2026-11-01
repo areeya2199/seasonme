@@ -66,12 +66,6 @@ void main() {
     if (pump) await tester.pump();
   }
 
-  Future<void> openColorQuestion(WidgetTester tester) async {
-    for (var i = 0; i < 3; i++) {
-      await tapText(tester, 'Skip');
-    }
-  }
-
   Future<void> waitForPhoto(WidgetTester tester) async {
     for (var i = 0; i < 100; i++) {
       await tester.runAsync(() async {
@@ -119,125 +113,96 @@ void main() {
     return screen as ProcessingScreen;
   }
 
-  testWidgets('keeps skipped answers null and preserves all answer keys', (
-    WidgetTester tester,
+  for (final preference in ['Bright', 'Muted']) {
+    testWidgets('only Q4 $preference and the original photo reach Processing', (
+      WidgetTester tester,
+    ) async {
+      await showQuestionnaire(tester);
+      await waitForPhoto(tester);
+      await tapText(tester, preference);
+      await finishWithoutMountingProcessing(tester);
+
+      final processing = pushedProcessing(tester);
+      expect(processing.answers, <int, String?>{3: preference});
+      final encoded = jsonEncode(
+        processing.answers.map((key, value) => MapEntry(key.toString(), value)),
+      );
+      expect(jsonDecode(encoded), <String, dynamic>{'3': preference});
+      expect(processing.imagePath, photo.path);
+      expect(photo.readAsBytesSync(), originalBytes);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('Q4 loads immediately and requires an explicit choice', (
+    tester,
   ) async {
     await showQuestionnaire(tester);
-
-    await tapText(tester, 'Skip');
-
-    await tapText(tester, 'Silver');
-    await tapText(tester, 'Continue');
-
-    await tapText(tester, 'Skip');
-
+    expect(find.text('Which colors suit you best?'), findsOneWidget);
+    expect(find.text('1/1'), findsOneWidget);
+    for (final removed in [
+      'Your wrist vein color',
+      'Gold or silver?',
+      'How does your skin react to sun?',
+      'Skip',
+      'Continue',
+      'Blue / Purple',
+      'Green',
+      'Gold',
+      'Silver',
+      'Tans easily, rarely burns',
+      'Burns easily, rarely tans',
+    ]) {
+      expect(find.text(removed), findsNothing);
+    }
     await waitForPhoto(tester);
-    await tapText(tester, 'Bright');
-    await finishWithoutMountingProcessing(tester);
-
-    final processing = pushedProcessing(tester);
-    expect(processing.answers, <int, String?>{
-      0: null,
-      1: 'Silver',
-      2: null,
-      3: 'Bright',
-    });
-
-    final encoded = jsonEncode(
-      processing.answers.map((key, value) => MapEntry(key.toString(), value)),
+    expect(
+      find.byKey(const ValueKey('questionnaire-user-photo')),
+      findsOneWidget,
     );
-    expect(jsonDecode(encoded), <String, dynamic>{
-      '0': null,
-      '1': 'Silver',
-      '2': null,
-      '3': 'Bright',
-    });
-    expect(processing.imagePath, photo.path);
-    expect(photo.readAsBytesSync(), originalBytes);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('restores and changes answers when navigating back', (
-    WidgetTester tester,
-  ) async {
-    await showQuestionnaire(tester);
-
-    await tapText(tester, 'Skip');
-
-    await tapText(tester, 'Gold');
-    await tapText(tester, 'Continue');
-
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pump();
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
-
-    await tapText(tester, 'Skip');
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pump();
-    expect(find.byIcon(Icons.check_circle), findsNothing);
-
-    await tapText(tester, 'Silver');
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
-  });
-
-  testWidgets('can skip Q1-Q3 but Q4 requires an explicit choice', (
-    WidgetTester tester,
-  ) async {
-    await showQuestionnaire(tester);
-
-    await openColorQuestion(tester);
-    await waitForPhoto(tester);
-    expect(find.text('Skip'), findsNothing);
     expect(find.byIcon(Icons.check_circle), findsNothing);
     expect(
       tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
       isNull,
     );
     await tapText(tester, 'Muted');
-    await finishWithoutMountingProcessing(tester);
-
-    final processing = pushedProcessing(tester);
-    expect(processing.answers, <int, String?>{
-      0: null,
-      1: null,
-      2: null,
-      3: 'Muted',
-    });
-
+    expect(
+      tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+      isNotNull,
+    );
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Q2 and Q3 use two images and keep their third answer choices', (
+  testWidgets('Back returns to the photo screen without earlier quiz steps', (
     tester,
   ) async {
-    await showQuestionnaire(tester);
-    for (var step = 0; step < 3; step++) {
-      await tester.pumpAndSettle();
-      final imageCount = step == 0 ? 3 : 2;
-      for (var option = 0; option < imageCount; option++) {
-        expect(
-          find.byKey(ValueKey('example-placeholder-$step-$option')),
-          findsOneWidget,
-        );
-      }
-      if (step == 1) {
-        expect(
-          find.byKey(const ValueKey('example-placeholder-1-2')),
-          findsNothing,
-        );
-        expect(find.text('Both look fine'), findsOneWidget);
-      }
-      if (step == 2) {
-        expect(
-          find.byKey(const ValueKey('example-placeholder-2-2')),
-          findsNothing,
-        );
-        expect(find.text('A little of both'), findsOneWidget);
-      }
-      await tapText(tester, 'Skip');
-    }
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => QuestionnaireScreen(imagePath: photo.path),
+                ),
+              ),
+              child: const Text('Choose photo'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tapText(tester, 'Choose photo');
+    await tester.pumpAndSettle();
     await waitForPhoto(tester);
+    await tapText(tester, 'Bright');
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose photo'), findsOneWidget);
+    expect(find.byType(QuestionnaireScreen), findsNothing);
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -245,7 +210,6 @@ void main() {
     'all six colors change together while source photo and bytes stay unchanged',
     (tester) async {
       await showQuestionnaire(tester);
-      await openColorQuestion(tester);
       await waitForPhoto(tester);
       final photoFinder = find.byKey(
         const ValueKey('questionnaire-user-photo'),
@@ -264,11 +228,6 @@ void main() {
       expect(tester.widget<Image>(photoFinder).image, source);
       expect(photo.readAsBytesSync(), originalBytes);
 
-      await tester.tap(find.byIcon(Icons.arrow_back));
-      await tester.pump();
-      await tapText(tester, 'Skip');
-      expect(photoColors(tester), muted);
-      expect(find.byIcon(Icons.check_circle), findsOneWidget);
       await tapText(tester, 'Bright');
       expect(photoColors(tester), bright);
       expect(tester.takeException(), isNull);
@@ -288,7 +247,6 @@ void main() {
         )..writeAsStringSync('not an image')).path,
       };
       await showQuestionnaire(tester, imagePath: badPath);
-      await openColorQuestion(tester);
       await waitForPhoto(tester);
       await tapText(tester, 'Bright');
       expect(
@@ -312,7 +270,6 @@ void main() {
     tester,
   ) async {
     await showQuestionnaire(tester);
-    await openColorQuestion(tester);
     await waitForPhoto(tester);
     await tapText(tester, 'Bright');
     photo.deleteSync();
@@ -339,7 +296,6 @@ void main() {
     tester,
   ) async {
     await showQuestionnaire(tester);
-    await openColorQuestion(tester);
     await waitForPhoto(tester);
     await tapText(tester, 'Muted');
     final previous = observer.lastPushedRoute;
@@ -376,22 +332,12 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await showQuestionnaire(tester, textScale: layout.$3);
 
-      for (var step = 0; step < 3; step++) {
-        expect(find.text('${step + 1}/4'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        await tapText(tester, 'Skip');
-      }
-      expect(find.text('4/4'), findsOneWidget);
+      expect(find.text('1/1'), findsOneWidget);
       await waitForPhoto(tester);
       await tapText(tester, 'Muted');
       await finishWithoutMountingProcessing(tester);
 
-      expect(pushedProcessing(tester).answers, <int, String?>{
-        0: null,
-        1: null,
-        2: null,
-        3: 'Muted',
-      });
+      expect(pushedProcessing(tester).answers, <int, String?>{3: 'Muted'});
       await tester.pumpWidget(const SizedBox.shrink());
       expect(tester.takeException(), isNull);
     });
