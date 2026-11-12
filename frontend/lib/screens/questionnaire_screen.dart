@@ -7,20 +7,20 @@ import 'processing_screen.dart';
 // Temporary six-color previews based on the approved mockup. Replace BOTH
 // lists with the owner's final palettes; these never affect backend scoring.
 const _brightPalette = [
-  Color(0xFF12429E),
-  Color(0xFFde0065),
-  Color(0xFFcfcdff),
-  Color(0xFF629b3d),
-  Color(0xFFe65d4d),
-  Color(0xFFFdebad),
+  Color(0xFFfcfffe),
+  Color(0xFF8afcff),
+  Color(0xFFff9dbd),
+  Color(0xFF4f9fff),
+  Color(0xFFe316eb),
+  Color(0xFF680bb3),
 ];
 const _mutedPalette = [
-  Color(0xFF3c557d),
-  Color(0xFFd1869b),
-  Color(0xFFe8e5d2),
-  Color(0xFF4f9e81),
-  Color(0xFF4fbec5),
-  Color(0xFF4a4041),
+  Color(0xFFFFFFFF),
+  Color(0xFFFDEFF4),
+  Color(0xFFF7C8D8),
+  Color(0xFFCDE7F0),
+  Color(0xFF85CFC5),
+  Color(0xFF5B6C8F),
 ];
 
 class QuestionnaireScreen extends StatefulWidget {

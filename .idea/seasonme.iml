@@ -75,6 +75,9 @@
       <excludeFolder url="file://$MODULE_DIR$/frontend/windows/flutter/ephemeral/.plugin_symlinks/flutter_secure_storage_windows/example/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/frontend/windows/flutter/ephemeral/.plugin_symlinks/flutter_secure_storage_windows/example/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/frontend/windows/flutter/ephemeral/.plugin_symlinks/flutter_secure_storage_windows/example/build" />
+      <excludeFolder url="file://$MODULE_DIR$/.render-test/image-only-baseline-ho_9bqsm/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/.render-test/image-only-baseline-ho_9bqsm/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/.render-test/image-only-baseline-ho_9bqsm/build" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

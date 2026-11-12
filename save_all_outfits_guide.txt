@@ -1,0 +1,204 @@
+คู่มือ: ให้เซฟ Outfit ได้ทุกระดับ และแสดงในหน้า Saved Outfits
+
+เอกสารนี้เป็นแนวทางและตัวอย่างเท่านั้น ไม่ได้แก้โค้ดจริง
+อ้างอิงโค้ดที่ตรวจในโปรเจกต์ seasonme วันที่ 3 พฤศจิกายน 2026
+ตำแหน่งบรรทัดอาจเปลี่ยนได้ ให้ค้นชื่อฟังก์ชันประกอบ
+
+เป้าหมาย
+- เซฟได้ทั้ง poor, good และ excellent
+- คะแนนยังแบ่งระดับตามเดิม: 0–44 poor, 45–74 good, 75–100 excellent
+- หน้า Saved Outfits แสดงรูป คะแนน โน้ต และชื่อระดับได้ถูกต้อง
+- เงื่อนไขความพร้อมอื่น เช่น มีรูป โหลดเสร็จ และไม่ได้กำลังบันทึก ยังใช้เหมือนเดิม
+
+ต้องปรับ 4 ไฟล์ รวม 6 จุด ดังนี้
+
+============================================================
+1. เปิดให้ปุ่ม Save กดได้ทุกระดับ
+============================================================
+ไฟล์: frontend/lib/screens/clothing_screen.dart
+ค้นหา: Widget _buildSaveOutfit() หรือ final canSave
+
+เอาเงื่อนไขนี้ออก:
+    _result!.level != MatchLevel.poor
+
+หลังปรับ ตัวแปรควรเป็น:
+
+final canSave =
+    !_accountChanged &&
+    _hasPixels &&
+    _state == _LoadState.done &&
+    _pickedImage != null &&
+    _result != null;
+
+ข้อสังเกต: เมื่อเอาเงื่อนไขสุดท้ายออก ต้องเอา && ที่ต่อไปหาเงื่อนไขนั้นออกด้วย
+และปิดด้วย ; หลัง _result != null
+
+ปุ่ม Save ใช้ของเดิมได้:
+
+OutfitSaveButton(
+  state: _saveState,
+  onPressed: canSave && !_noteDialogOpen ? _saveOutfit : null,
+),
+
+เหตุผล: เมื่อ canSave เป็น true และไม่ได้เปิดหน้าต่างโน้ต ปุ่มจะเรียก
+_saveOutfit ได้ หาก onPressed เป็น null ปุ่มจะกดไม่ได้
+ปุ่มแก้โน้ตที่ใช้ canSave ร่วมกันจะผ่านเงื่อนไขเรื่องระดับด้วย
+
+============================================================
+2. ให้ฟังก์ชันบันทึกรับทุกระดับ
+============================================================
+ไฟล์: frontend/lib/screens/clothing_screen.dart
+ค้นหา: Future<void> _saveOutfit() async
+
+เอาเงื่อนไขนี้ออกจาก if ด้านบน:
+    || _result!.level == MatchLevel.poor
+
+ส่วนต้นของฟังก์ชันหลังปรับ:
+
+Future<void> _saveOutfit() async {
+  if (_noteDialogOpen ||
+      _saveState == OutfitSaveState.saving ||
+      _saveState == OutfitSaveState.saved ||
+      _accountChanged ||
+      _picking ||
+      !_hasPixels ||
+      _pickedBytes == null ||
+      _result == null) {
+    return;
+  }
+
+  // ส่วนบันทึกด้านล่างคงเดิม
+}
+
+ตัวอย่างแสดงเฉพาะเงื่อนไขด้านบน ไม่ใช่ให้แทนทั้งฟังก์ชันแล้วลบส่วนบันทึก
+เหตุผล: จุดที่ 1 เปิดให้กดปุ่ม ส่วนจุดนี้เปิดให้ฟังก์ชันทำงานต่อได้
+
+============================================================
+3. ให้ตัวตรวจข้อมูลรับคะแนน 0–100 และระดับ poor
+============================================================
+ไฟล์: frontend/lib/models/saved_outfit.dart
+ค้นหา: void validate() ภายใน class OutfitMatchSnapshot
+
+ส่วนต้นเดิม:
+
+if (matchPercent < 45 ||
+    matchPercent > 100 ||
+    matchLevel == MatchLevel.poor ||
+    matchLevelFromPercent(matchPercent) != matchLevel ||
+
+ปรับเฉพาะส่วนต้นเป็น:
+
+if (matchPercent < 0 ||
+    matchPercent > 100 ||
+    matchLevelFromPercent(matchPercent) != matchLevel ||
+
+เงื่อนไขที่เหลือด้านล่าง รวมถึงการ throw ข้อผิดพลาด คงเดิมทั้งหมด
+ตัวอย่างนี้เป็นส่วนหนึ่งของ if จึงยังไม่ใช่โค้ดเต็มที่นำไปรันเดี่ยว ๆ ได้
+
+สิ่งที่เปลี่ยน:
+- เปลี่ยนคะแนนขั้นต่ำจาก 45 เป็น 0
+- เอาเงื่อนไขห้าม MatchLevel.poor ออก
+- ยังคงตรวจว่าระดับตรงกับคะแนน
+
+เหตุผล: service เรียก validate() ก่อนบันทึก และ fromMap() เรียกตอนอ่านกลับ
+หากไม่ปรับ ต่อให้เปิดปุ่มกับแก้ rules แล้ว ข้อมูล poor ก็ยังไม่ผ่านตัวตรวจนี้
+ตอนโหลดรายการ service จะข้ามรายการที่ข้อมูลไม่ผ่านการตรวจ
+
+ไม่ต้องเปลี่ยนเกณฑ์ matchLevelFromPercent ใน color_utils.dart
+เกณฑ์เดิมคือ 75 ขึ้นไป excellent, 45 ขึ้นไป good, ต่ำกว่า 45 poor
+
+============================================================
+4. ให้ Firestore rules รับข้อมูลทุกระดับอย่างสอดคล้องกับคะแนน
+============================================================
+ไฟล์: firebase/firestore.rules
+ค้นหา: data.matchPercent is int ในกฎของ savedOutfits
+
+แทนเฉพาะส่วนตรวจคะแนนและระดับเดิมด้วย:
+
+&& data.matchPercent is int
+&& data.matchPercent >= 0
+&& data.matchPercent <= 100
+&& (
+  (data.matchLevel == 'poor' && data.matchPercent < 45)
+  || (data.matchLevel == 'good'
+      && data.matchPercent >= 45
+      && data.matchPercent < 75)
+  || (data.matchLevel == 'excellent'
+      && data.matchPercent >= 75)
+)
+
+เงื่อนไขอื่น เช่น เจ้าของข้อมูล รูปภาพ โน้ต และ schemaVersion คงเดิม
+
+เหตุผลที่ good ต้องมี >= 45:
+เดิมเงื่อนไขรวมบังคับคะแนน >= 45 อยู่แล้ว จึงตรวจ good แค่ < 75 ได้
+แต่เมื่อเปลี่ยนคะแนนขั้นต่ำรวมเป็น 0 ต้องเพิ่ม >= 45 ในกรณี good
+เพื่อไม่ให้ข้อมูลผิดอย่างคะแนน 20 แต่ระบุระดับ good ผ่านได้
+
+เมื่อนำไปทำจริง ต้องนำ rules ที่แก้ไปใช้งานบน Firebase ที่แอปเชื่อมต่อด้วย
+การแก้ไฟล์ในเครื่องอย่างเดียวยังไม่เปลี่ยนกฎของ Firebase ที่ใช้งานอยู่
+
+============================================================
+5. ให้หน้า Saved Outfits แสดงชื่อระดับครบสามระดับ
+============================================================
+ไฟล์: frontend/lib/screens/saved_outfits_screen.dart
+ค้นหา: String _label(SavedOutfit item)
+
+เดิมแยกแค่ excellent กับอย่างอื่น ทำให้ poor ถูกเรียกว่า Good Match
+ตัวอย่างหลังปรับ:
+
+String _label(SavedOutfit item) =>
+    switch (item.match.matchLevel.name) {
+      'excellent' => 'Excellent Match',
+      'good' => 'Good Match',
+      _ => 'Poor Match',
+    };
+
+จากโค้ดที่ตรวจ ส่วนดึงรายการใช้ของเดิมได้:
+- หน้า Saved Outfits เรียก service โหลดรายการ
+- service ไม่ได้กรองคะแนนขั้นต่ำแยกไว้อีก
+- จุดที่ทำให้ poor ไม่ผ่านคือ validate() ในขั้นตอน 3
+
+============================================================
+6. เพิ่มสีสำหรับ poor บนการ์ด
+============================================================
+ไฟล์: frontend/lib/screens/saved_outfits_screen.dart
+ค้นหา: final color ภายใน Widget _tile(SavedOutfit item)
+
+ตัวอย่างหลังปรับ:
+
+final color = switch (item.match.matchLevel.name) {
+  'excellent' => const Color(0xFF28714E),
+  'good' => const Color(0xFF88631C),
+  _ => const Color(0xFFB34A4A),
+};
+
+สีแดงของ poor เป็นตัวอย่างที่เลือกเพิ่ม สามารถเลือกสีตามงานออกแบบได้
+จุดนี้ช่วยแยกระดับบนหน้าจอ ไม่ใช่เงื่อนไขที่ทำให้บันทึกผ่าน
+
+============================================================
+ตรวจผลเมื่อทำจริง
+============================================================
+1. ทดลองคะแนน 0, 44, 45, 74, 75 และ 100 พร้อมระดับที่ตรงกัน
+2. ตรวจว่า poor กดปุ่ม Save และเปิดแก้โน้ตได้เมื่อรูปพร้อม
+3. ตรวจว่าบันทึกสำเร็จ ไม่ติดตัวตรวจในแอปหรือ rules
+4. เปิดหน้า Saved Outfits หรือกดรีเฟรชรายการ
+5. ตรวจว่ารูป คะแนน โน้ต ชื่อระดับ และสี แสดงถูกต้อง
+6. ตรวจว่าคะแนนนอกช่วง เช่น -1 และ 101 ยังไม่ผ่าน
+7. ตรวจว่าคะแนนกับระดับไม่ตรงกัน เช่น 20 แต่เป็น good ยังไม่ผ่าน
+8. ปรับชุดทดสอบเดิมที่คาดว่า poor ต้องเซฟไม่ผ่านให้ตรงพฤติกรรมใหม่
+   ตัวอย่างไฟล์ที่มีกรณีนี้: firebase/saved-outfits.rules.test.mjs
+
+เส้นทางที่ต้องเข้าใจ:
+canSave เปิดปุ่ม
+  -> _saveOutfit() เริ่มบันทึก
+  -> validate() ตรวจข้อมูลในแอป
+  -> rules อนุญาตให้เขียนข้อมูล
+  -> อ่านกลับผ่าน fromMap() และ validate()
+  -> หน้า Saved Outfits แสดงรายการและป้ายระดับ
+  
+  
+_pillTag(
+  '${UndertoneUtils.label(widget.analysis, withSuffix: true)}'
+  ' • Hue angle: ${widget.analysis?['hue_angle'] ?? '—'}°',
+  cardText,
+),
